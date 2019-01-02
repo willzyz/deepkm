@@ -129,7 +129,8 @@ class TopicRNN:
 
     #tf.scalar_summary("learning rate", self.lr)
   
-  def run_kmeans(self, X, centroids, assignments): 
+  def run_kmeans(self, X, centroids, assignments):
+    print('hello world') 
     ## performs iterative kmeans algorithm 
     
     # re-evaluate centroids 
@@ -215,8 +216,8 @@ class TopicRNN:
 
       #cell = tf.nn.rnn_cell.MultiRNNCell([rnn_cell] * self.n_layers)
       cell = MultiRNNCell([rnn_cell for i in range(self.n_layers)])
-
-      with tf.device("/cpu:0"):
+      
+      with tf.device("/device:GPU:0"): #"/cpu:0"):
         embedding = tf.get_variable("embedding", 
                     [self.vocab_size, self.generator_embed_dim])
         self.embedding = embedding #to visualize nearest neighbors
@@ -289,7 +290,7 @@ class TopicRNN:
       #cell = tf.nn.rnn_cell.MultiRNNCell([rnn_cell] * self.n_layers)
       cell = MultiRNNCell([rnn_cell for i in range(self.n_layers)])
       
-      with tf.device("/cpu:0"):
+      with tf.device("/device:GPU:0"): #"/cpu:0" 
         km_embedding = tf.get_variable("km_embedding",  #[todo: create km_embedding variable] 
                     [self.vocab_size, self.generator_embed_dim])
         self.km_embedding = km_embedding #to visualize nearest neighbors
