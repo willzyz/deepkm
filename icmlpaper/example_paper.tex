@@ -1,0 +1,141 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+%%%%%%%% ICML 2014 EXAMPLE LATEX SUBMISSION FILE %%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+% Use the following line _only_ if you're still using LaTeX 2.09.
+%\documentstyle[icml2014,epsf,natbib]{article}
+% If you rely on Latex2e packages, like most moden people use this:
+\documentclass{article}
+
+% use Times
+\usepackage{times}
+% For figures
+\usepackage{graphicx} % more modern
+%\usepackage{epsfig} % less modern
+\usepackage{subfigure} 
+
+% For citations
+\usepackage{natbib}
+
+% For algorithms 
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+% As of 2011, we use the hyperref package to produce hyperlinks in the 
+% resulting PDF.  If this breaks your system, please commend out the 
+% following usepackage line and replace \usepackage{icml2014} with 
+% \usepackage[nohyperref]{icml2014} above. 
+\usepackage{hyperref} 
+
+% Packages hyperref and algorithmic misbehave sometimes.  We can fix 
+% this with the following command. 
+\newcommand{\theHalgorithm}{\arabic{algorithm}} 
+
+% Employ the following version of the ``usepackage'' statement for 
+% submitting the draft version of the paper for review.  This will set 
+% the note in the first column to ``Under review.  Do not 
+% distribute.'' 
+\usepackage{icml2014} 
+% Employ this version of the ``usepackage'' statement after the paper has 
+% been accepted, when creating the final version.  This will set the 
+% note in the first column to ``Proceedings of the...'' 
+%\usepackage[accepted]{icml2014} 
+
+% The \icmltitle you define below is probably too long as a header. 
+% Therefore, a short form for the running title is supplied here: 
+\icmltitlerunning{Notes for a formulation of deep 
+  K-means algorithm for unsupervised learning} 
+
+\begin{document} 
+
+\twocolumn[ 
+\icmltitle{ Notes for a formulation of deep 
+  K-means algorithm for unsupervised learning } 
+
+% It is OKAY to include author information, even for blind 
+% submissions: the style file will automatically remove it for you 
+% unless you've provided the [accepted] option to the icml2014 
+% package. 
+\icmlauthor{Will Zou}{wzou@stanford.edu} 
+\icmladdress{Stanford University, Stanford, CA 94305 USA} 
+%\icmlauthor{Your CoAuthor's Name}{email@coauthordomain.edu} 
+%\icmladdress{Their Fantastic Institute, 
+%            27182 Exp St., Toronto, ON M6H 2T1 CANADA} 
+
+% You may provide any keywords that you 
+% find helpful for describing your paper; these are used to populate 
+% the "keywords" metadata in the PDF but will not be shown in the 
+% document 
+\icmlkeywords{boring formatting information, machine learning, ICML} 
+
+\vskip 0.3in 
+] 
+
+\begin{abstract} 
+  In this paper, I provide a fomulation of a deep K-means algorithm. 
+  In one sentence, this algorithm performs unsupervised clustering of 
+  images with a euclidean metric on top of a deep convolutional neural 
+  networks. 
+\end{abstract} 
+
+\section{Introduction} 
+\label{intro} 
+
+Deep convolutional neural networks are competitive architecture for
+recognition of images. The effectiveness of these architectures are
+attributable to the fact that they are constructed for hierarchically
+more complex representations of the input while exploring
+convolutional structures in the data. Althrough supervised training of
+these networks have shown significant success, the element of
+unsupervised learning whereby data forms groupings or clusters in the
+deep semantic embedding, is still missing. Although unsupervised
+learning algorithms are widely applicable in many fields of scientific
+investigation ~\cite{}, and have shown promising results to account
+for mid-level representations of the raw input data~\cite{}, it is
+unclear whether these generic unsupervised learning algorithms could
+discover highly-invariant representations such as those discovered by
+large-scale supervised training of deep convolutional networks. 
+
+In this work, we propose a novel iterative algorithm that combines the
+architectural advantages of convolutional networks for modeling image
+data, with large-scale training of generic unsupervised learning
+algorithms. In particular, we illustrate that the combination of the
+two is able to improve computer vision tasks by a significant margin. 
+
+\subsection{Algorithm} 
+The algorithm to perform K-means clustering is the following: 
+
+\begin{algorithm} 
+\caption{K-means algorithm} 
+\label{algo1}
+\begin{algorithmic}
+\STATE
+\STATE $Initialize cluster centroids \: \mu_1, \mu_2, \mu_3, ...,
+\mu_k \in \mathbb{R}^n$ 
+\WHILE{$convergence \: criteria \: not \: met$}
+    \STATE $[W_1, \ldots, W_L, b_1, \ldots, b_L] = split\_parameters(\theta_{all})$
+    \FOR{$l = 1 \: to \: L$}
+        \STATE $W_l = W_l - \mu \frac{\partial J_l}{\partial w_l}$
+        \STATE $b_l = b_l - \mu \frac{\partial J_l}{\partial b_l}$
+    \ENDFOR
+    \STATE $\theta_{all} = merge\_parameters(W_1, \ldots, W_L, b_1, \ldots, b_L)$
+    \STATE $\theta_{all} = \theta_{all} - \mu \frac{\partial J_{unfold}}{\partial \theta_{all}}$
+\ENDWHILE
+\end{algorithmic} 
+\end{algorithm} 
+
+\bibliography{example_paper} 
+\bibliographystyle{icml2014} 
+
+\end{document} 
+
+% This document was modified from the file originally made available by
+% Pat Langley and Andrea Danyluk for ICML-2K. This version was
+% created by Lise Getoor and Tobias Scheffer, it was slightly modified  
+% from the 2010 version by Thorsten Joachims & Johannes Fuernkranz, 
+% slightly modified from the 2009 version by Kiri Wagstaff and 
+% Sam Roweis's 2008 version, which is slightly modified from 
+% Prasad Tadepalli's 2007 version which is a lightly 
+% changed version of the previous year's version by Andrew Moore, 
+% which was in turn edited from those of Kristian Kersting and 
+% Codrina Lauth. Alex Smola contributed to the algorithmic style files.  
