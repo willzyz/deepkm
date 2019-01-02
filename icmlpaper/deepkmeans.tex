@@ -1,0 +1,452 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+%%%%%%%% ICML 2014 EXAMPLE LATEX SUBMISSION FILE %%%%%%%%%%%%%%%%% 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+% Use the following line _only_ if you're still using LaTeX 2.09. 
+%\documentstyle[icml2014,epsf,natbib]{article} 
+% If you rely on Latex2e packages, like most moden people use this: 
+\documentclass{article} 
+
+% use Times
+\usepackage{times}
+% For figures
+\usepackage{graphicx} % more modern
+\usepackage{amsfonts} % more modern
+%\usepackage{epsfig} % less modern
+\usepackage{subfigure} 
+
+% For citations
+\usepackage{natbib}
+
+% For algorithms 
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+% As of 2011, we use the hyperref package to produce hyperlinks in the 
+% resulting PDF.  If this breaks your system, please commend out the 
+% following usepackage line and replace \usepackage{icml2014} with 
+% \usepackage[nohyperref]{icml2014} above. 
+\usepackage{hyperref} 
+
+% additions to the template latex file 
+\usepackage{amsmath} 
+\usepackage{dsfont} 
+\DeclareMathOperator*{\argmin}{arg\,min} 
+\DeclareMathOperator*{\minimize}{minimize} 
+
+% Packages hyperref and algorithmic misbehave sometimes.  We can fix 
+% this with the following command. 
+\newcommand{\theHalgorithm}{\arabic{algorithm}} 
+
+% Employ the following version of the ``usepackage'' statement for 
+% submitting the draft version of the paper for review.  This will set 
+% the note in the first column to ``Under review.  Do not 
+% distribute.'' 
+\usepackage{icml2014} 
+
+% Employ this version of the ``usepackage'' statement after the paper has 
+% been accepted, when creating the final version.  This will set the 
+% note in the first column to ``Proceedings of the...'' 
+%\usepackage[accepted]{icml2014} 
+
+% The \icmltitle you define below is probably too long as a header. 
+% Therefore, a short form for the running title is supplied here: 
+\icmltitlerunning{Deep vector-quantization for unsupervised learning} 
+
+\begin{document} 
+
+\twocolumn[ 
+\icmltitle{ Deep dynamic routing using hierarchical unsupervised learning} 
+
+% It is OKAY to include author information, even for blind 
+% submissions: the style file will automatically remove it for you 
+% unless you've provided the [accepted] option to the icml2014 
+% package. 
+\icmlauthor{Will Zou}{wzou@stanford.edu} 
+\icmladdress{Stanford University, Stanford, CA 94305 USA} 
+%\icmlauthor{Your CoAuthor's Name}{email@coauthordomain.edu} 
+%\icmladdress{Their Fantastic Institute, 
+%            27182 Exp St., Toronto, ON M6H 2T1 CANADA} 
+
+% You may provide any keywords that you 
+% find helpful for describing your paper; these are used to populate 
+% the "keywords" metadata in the PDF but will not be shown in the 
+% document 
+
+\icmlkeywords{boring formatting information, machine learning, ICML} 
+
+\vskip 0.3in 
+] 
+
+\begin{abstract} 
+  Generic vector-quantization (K-means clustering) is one of the
+  most widely used unsupervised feature learning algorithms. Despite efforts 
+  to find its effective application to find hierarchically complex, invariant recognizers, 
+  it remains unclear how deep recognition systems 
+  could be constructed with vector-quantization in the one-learning-algorithm
+  paradigm, as how single perceptrons build up to a forward neural network. 
+  We propose an algorithm to apply K-means on smaller decompositions, 
+  then aggregate features across increasingly 
+  larger spatio-temporal domain. This construct is iterated to form a hierarchy 
+  of invariant recognizers. We utilize the learning capacity of each basic K-mean unit 
+  and also use them as dynamic routing mechanisms for choosing 
+  pathways in a neural network. In the meantime, we are able to numerically 
+  optimize unsupervised learning objectives in the 
+  high-level, global network by euclidean metric objectives on the 
+  feature representations projected by a hierarchical network of K-means and 
+  dynamically routed modules. 
+  To verify the effectiveness of our approach, we 
+  perform unsupervised learning experiments on image and text categorization. 
+\end{abstract} 
+
+\section{Introduction} 
+\label{intro} 
+
+Deep neural networks have been recently shown to be a competitive
+practical architectures for supervised learning. The effectiveness of
+this architectures is attributable to their hierarchical representations 
+of the input while exploring structures in the data, such as local receptive 
+fields and convolution. Despite this success, the element of 
+unsupervised learning whereby data forms groupings or clusters in 
+the deep semantic embedding, is still missing. Although unsupervised 
+learning algorithms are widely applicable in many fields,
+and have shown promising results to account for low-level and
+mid-level representations in images~\cite{coates2011analysis,
+ coates2012emergence, Le12}, it seems yet unclear whether these
+generic unsupervised learning algorithms, without labeled information,
+could help discover large collections of highly invariant object-level
+representations such as those discovered by large-scale supervised
+training of deep convolutional networks~\cite{Krizhevsky12}. 
+
+In this work, we make two different angles of attack compared to prior
+works. First, we decompose the learning algorithm
+into one layer of unsupervised algorithm, and a `model-based'
+projection with neural networks. Specifically, in our formulation for
+images, the unsupervised algorithm is vector-quantization, and the
+projection model is a multi-layer convolutional network. Using this
+set-up, we illustrate a novel algorithm that learns each component
+iteratively. This iterative algorthim is based on the
+K-Nearest-Neighbour principle in the Euclidean metric space. This
+principle not only governs the vector-quantization layer, but also,
+through an EM-like iterative process, the tuning of the weights in the
+representation model, implemented by a CNN. This perspective 
+focuses on how a deep network could optimize globally through 
+K-means or vector-quantization. 
+
+The previous point-of-view is limited since the learning principle of 
+vector quantization does not apply locally, nor does the algorithm 
+builds hierarchical more complex understanding of data. Its complementary 
+perspective is the `one-learning-algorithm' principle where a vector-quantizer 
+is applied in a hierarchical manner. Similar topics are discussed 
+in prior work such as ~\cite{coates2011analysis, coates2012emergence}. 
+However, the we make an important observation that cross-layer feature 
+aggregation mechanism is critical in a hierarchical vector-quantization algorithm. 
+This is the key difference of our proposal with prior work. We propose an entirely 
+new way of building a deep network of vector-quantizers 
+by aggregating smaller domain data-instances through (to think: soft) histograms 
+while enlarging the spatio domain in each layer of the hierarchy. This perspective 
+illustrates how a larger system could learn locally and iteratively using the 
+same learning principle. 
+
+Finally, we both perspectives and illustrate learning an entire network in 
+an iterative fashion. The network learning combines local and iterative 
+learning, with global optimization. We illustrate how this method could 
+learn invariant and hierarchically more complex features through 
+unsupervised learning. 
+
+\section{Algorithm and Method} 
+\subsection{vector-quantization} 
+Here we quickly revisit the well-known vector-quantization, or K-means
+clustering algorithm. Given data points $x^{(1)}, ..., x^{(m)}$, the
+algorithm tries to find the optimal cluster assignment, across $C$
+clusters. The parameter $C$ is pre-defined. The iterative algorithm
+starts with a set of random assignments of the datapoints to
+clusters. In each iteration, the mean across each cluster is found,
+then another optimal assignment is computed using the
+reasignment. This is the formalized vector-quantization algorithm:
+\begin{algorithm} 
+\caption{K-means algorithm} 
+\label{algo1} 
+\begin{algorithmic} 
+\STATE Initialize cluster centroids $\: \mu_1, \mu_2, \mu_3,..., 
+\mu_k \in \mathbb{R}^n$ 
+\WHILE{convergence criteria not met} 
+    \FOR{every $i$} 
+        \STATE $c^{(i)} := \argmin_i \| x^{(i)} - \mu_j\|_2^2$ 
+    \ENDFOR 
+    \FOR{every $j$} 
+        \STATE $\mu_j = \frac{\sum_{i=1}^m \mathds{1}\{c^{(i)}=j\}}{\sum_{i=1}^m \mathds{1}\{c^{(i)}=j\}}$ 
+    \ENDFOR 
+\ENDWHILE 
+\end{algorithmic} 
+\end{algorithm} 
+
+\subsection{Vector-quantization unit processors for deep learning} 
+Previous methods use stacking layers for building deep networks. 
+The next layer builds on the output activations of previous layers. For K-means 
+algorithm, the hard and soft activation layer-wise formulations are the following: 
+
+\begin{equation} 
+f_k(x)=
+\left\{ 
+\begin{array}{l l} 
+1 \text{ if } k = \argmin_j || x - c^{(j)} ||_2^2 \\ 
+0 \text{ otherwise} 
+%\begin{tabular} {} 
+%\end{tabular} 
+\end{array}\right.
+\end{equation} 
+
+\begin{equation}
+f_k(x) = \max \{0, \mu(z) - z_k\} 
+\end{equation} 
+
+in above equation, $z_k=||x-c^{(k)}||_2^2$ and $\mu(z)$ is the mean of the elements of $z$. 
+
+The benefit of stacking vector-quantization layers is simplicity, and multi-layer construction 
+is similar to multi-layer perceptrons which is a natural construct for deep learning. 
+The direct stacking of vector-quantization layers implies, the upper layers must operate 
+on the bottom layer's manifold. Bottom layer 
+clustering results or centroids clearly characterizes the data, and such characterization 
+can be inferred easily from the feature vector of distances from each centroid. This means 
+discovering the patterns on top of those feature vectors may lead to trivial solutions similar to 
+the characterization of bottom layer. 
+
+In light of this, we propose an alternative method to build a deep network out of vector quantization 
+layers. Instead of stacking, we perform domain expansion per each layer of the hierarchy, and 
+use histograming as the feature aggregation method. This is described in the following section. 
+
+\subsubsection{Spatio-temporal domain expansion and histograming} 
+Stacking of K-means modules can utilize feature embeddings of previous layer. This seemingly effective method incurs problems 
+for unsupervised learning since upper layers can find trivial solutions of previous layer, illustrated in Figure x. 
+
+%[caption] the distance featurization $\mathbf{x} = [d_1, d_2, d_3]$ clearly indicates $\mathbf{x}$ is assigned to cluster 2 
+% since $d_2$ is significantly smaller than $d_1$ and $d_3$. 
+
+However, illustrated in Figure x, if we attempt to expand the spatial-temporal domain, and find multiple data points categorized to different centroids in the same domain, we are able to find meaningful representations which clearly adds new feature groupings of the data. 
+This perspective looks at not only featurizing data using the K-means transformation layer, but look at building a more diverse, varied and meaningful feature collection through aggregating those featurizations on a larger spatio domain. 
+
+To illustrate and formalize this featurization method. We can abstract the K-means transformation layer as  $\emph{K}(\hat{x}, \{c^{(k)}\})$, which transforms the smaller data decomposition $\hat{x}$ with K-means $\emph{K}$ into its one-hot vector representation obtained by allocating $\hat{x}$ to its centroid. Then, we can explain another operator $\emph{H}$, which looks at a larger scope of spatio domain $x$. For data decompositions $\hat{x} \in x$, the operator $\emph{H}$ aggregates one-hot vectors by $\emph{K}(\hat{x}, \{c^{(k)}\})$ by summation. The overall operator which represents above-mentioned process is denoted as $\sigma(x)$: 
+\begin{equation} 
+\sigma(x, \{c^{(k)}\}) = \emph{H} \{ \emph{K} (\hat{x}, \{c^{(k)}\}) \text{ where } \hat{x} \in x \}  
+\end{equation} 
+
+Here $x$ is the parent data segment, and $\hat{x}$'s are smaller child segments inside $x$, $\emph{K}$ is the K-means hard assignment operator, and $\emph{H}$ is the histogram aggregation operator. 
+
+\subsubsection{Convolutional feature aggregation} 
+This feature aggregation can operate in a convolutional manner. This is to say, the same set of k-means centroids and aggregation region 
+can be used to apply to different segments or patches of data. Application of the previously shown operator $\sigma$ in a convolution. On each coordinate index pair $(i, j)$, the output map of the convolution layer can be computed with: 
+\begin{equation} 
+y_k(i, j) = \sigma_k(x(i, j), \{c^{(k)}\}) 
+\end{equation} 
+
+For convolutional neural networks, we can add intermediate pooling layers such as average or max pooling. 
+
+%\subsubsection{Hierarchical feature aggregation} 
+%\subsection{Numerical optimization of over-all cost function for vector-quantization} 
+
+\subsubsection{Neighborhood Component Analysis} 
+The Neighborhood Component Analysis algorithm was proposed 
+by~\cite{roweis17neighborhood}, and later applied in a deep learning 
+context in~\cite{salakhutdinov2007learning}. More recently this 
+algorithm could be seen as a form of `metric learning' technique for 
+cases where not only class labeled are used in the supervision task, 
+but also a certain metric is defined, or learned at the same time in 
+the projected non-linear embedding space~\cite{kedem2012non}. 
+
+To prepare for the formulation of the deep convolutional K-means 
+algorithm, we now re-iterate the formulation of NCA 
+from~\cite{roweis17neighbourhood}. 
+
+We are given a set of $N$ labeled training cases $(x^a, c^a)$, where 
+$a = 1, 2, ..., N$. For each training vector $x^a$, define the 
+probability that point $a$ selects one of its neighbours $b$ in the 
+transformed feature space as: 
+\begin{equation} 
+\label{nca_softmax}
+p_{ab} = \frac{\exp(-d_{ab})}{\sum_{z\neg a} \exp(-d_{az})}, p_{aa} =0 
+\end{equation} 
+Take $d_{ab}$ to be the Euclidean distance metric: 
+\begin{equation} 
+\label{nca_distance}
+d_{ab} = \| f(x^a|W) - f(x^b|W) \|^2 
+\end{equation} 
+and $f(\dot|W)$ is the projection function defined by the multi-layer
+deep convolutional neural network parameterized by weights $W$. The
+probability that point $a$ belongs to class $k$ depends on the
+relative proximity of all other data points that belong to class $k$: 
+\begin{equation} 
+p(c^a = k) = \sum_{b:c^b=k} p_{ab} 
+\end{equation} 
+The NCA objective is to maximize the expected number of correctly
+classified points on the training data: 
+\begin{equation}
+O_{NCA} = \sum_{a=1}^N\sum_{b:c^a=c^b}p_{ab}
+\end{equation}
+or the log probabilities of the correct classification: 
+\begin{equation}
+O_{ML} = \sum_{a=1}^N\log(\sum_{b:c^a=c^b}p_{ab})
+\end{equation} 
+
+\subsubsection{Vector-quantization on Network Projection} 
+\label{kmeans_net_projection} 
+In the revised deep vector-quantization algorithm, we iterate between
+training the vector-quantization layer on the learned representations,
+and the non-linear projection using the multi-layer convolutional
+neural network. At the network training stage, we use non-linear NCA
+and use the current cluster asignment as class labels. At the VC
+stage, we keep the representations fixed and perform a number of
+iterations of the K-means algorithm. Essentially, instead of
+performing K-means clustering on data points $\mathbf{x}$, we
+substitute $\mathbf{x}$ with a non-linear projection using the deep
+neural network from data $\mathbf{x}$ to higher layer deep embedding
+$f(\mathbf{x}|W)$. Thus the algorithm becomes \textbf{Algorithm 2}. 
+
+\begin{algorithm} 
+\caption{Vector-quantization on Network Projection algorithm} 
+\label{algo1} 
+\begin{algorithmic} 
+\STATE Initialize cluster centroids $\: \mu_1, \mu_2, \mu_3,..., 
+\mu_k \in \mathbb{R}^n$ 
+\WHILE{Global convergence criterion not met} 
+\STATE \emph{\# Obtain non-linear projections using deep network }
+\FOR{every $i$} 
+    \STATE $y^{(i)} = f(x^{(i)}| W)$
+\ENDFOR 
+\STATE \emph{\# run m iterations of K-means }
+\FOR{$m_1$ iterations} 
+    \FOR{every $i$} 
+        \STATE $ c^{(i)} := \underset{i}{\argmin} \| y^{(i)} - \mu_j\|_2^2$
+    \ENDFOR 
+    \FOR{every $j$} 
+        \STATE $\mu_j = \frac{\sum_{i=1}^m \mathds{1}\{c^{(i)}=j\}}{\sum_{i=1}^m \mathds{1}\{c^{(i)}=j\}}$
+    \ENDFOR 
+\ENDFOR 
+\STATE \emph{\# Fine-tune deep network with NCA }
+\FOR{$m_2$ iterations} 
+\STATE $\underset{W}{\minimize }  O_{NCA}({x^{(i)}, c^{(i)}})$ 
+\ENDFOR 
+\ENDWHILE
+\end{algorithmic} 
+\end{algorithm} 
+
+We also present a variant of the algorithm, by replacing NCA with
+directly minimizing the K-means objective. In otherwise, the objective
+for fine-tuning the neural network is the sum of all $L2$ norms of
+differences between datapoints and its cluster mean. This alternative
+is formalized in \textbf{Algorithm 3}. 
+
+\begin{algorithm} 
+\caption{Alternative deep vector-quantization algorithm} 
+\label{algo1} 
+\begin{algorithmic} 
+\STATE Initialize cluster centroids $\: \mu_1, \mu_2, \mu_3,..., 
+\mu_k \in \mathbb{R}^n$ 
+\WHILE{Global convergence criterion not met} 
+\STATE \emph{\# Obtain non-linear projections using deep network } 
+\FOR{every $i$} 
+    \STATE $y^{(i)} = f(x^{(i)}| W)$ 
+\ENDFOR 
+\STATE \emph{\# run m iterations of K-means } 
+\FOR{$m_1$ iterations} 
+    \FOR{every $i$} 
+        \STATE $ c^{(i)} := \underset{i}{\argmin} \| y^{(i)} - \mu_j\|_2^2$ 
+    \ENDFOR 
+    \FOR{every $j$} 
+        \STATE $\mu_j = \frac{\sum_{i=1}^m \mathds{1}\{c^{(i)}=j\}}{\sum_{i=1}^m \mathds{1}\{c^{(i)}=j\}}$ 
+    \ENDFOR 
+\ENDFOR 
+\STATE \emph{\# Fine-tune deep network with K-means objective } 
+\FOR{$m_2$ iterations} 
+\STATE $\underset{W}{\minimize }  \sum_i\|x^{(i)} - \mu^{(i)}\|_2^2$ 
+\ENDFOR 
+\ENDWHILE 
+\end{algorithmic} 
+\end{algorithm} 
+
+\subsection{Incorporation of k-means in semi-supervised deep learning} 
+Consider the goal to obtain best estimate for a deep discriminative model $p(y | x)$, while
+we leverage a k-means unsupervised process with centroids $c$. The k-means algorithm is learned iteratively 
+as in the previous section, where the original k-means algorithm can be applied on a projection neural network. This neural network not only offers more model capacity, but also 
+constructs an a feature representation function $\hat{x} = f_W(x)$ which serve the intermediate basis 
+for semi-supervised learning. The network weights $W$ in the projection function $\hat{x} = f_W(x) $ represents model capacity dedicated to unsupervised learning, and 
+upper layers are dedicated to supervised. Instead of $p(c | x)$, the intermediate $\hat{x}$ is used to 
+learning and assign centroids , with$p(c | \hat{x}) = p (c | f_W(x)) $. 
+
+If the two random variables $y$ and $c$ were to be independent given $x$, the benefit 
+of semi-supervised learning would have been unclear. Consider transfer learning or self-taught learning frameworks, learning feature sets represented by $c$ will correlate the decision on $y$, thus it is natural to assume non-independence of $y$ and $c$ given $x$. Further part of the goal to develop semi-supervised algorithms, is to have unsupervised process 
+help the supervised learning algorithm, or vice versa. 
+
+Motivated by this goal,  we can define a dependency relationship between the two parts by marginalizing out the posterior $p(y | x)$. 
+
+\begin{align}
+\label{y_c_depend_equation}
+p(y | x) &= \sum_c p(y, c | \hat{x}) \\
+	    &= \sum_c p(y | c, \hat{x}) p(c | \hat{x}) \\ 
+	    &= \sum_c p(y | c, f_W(x)) p(c | f_W(x)) 
+\end{align} 
+
+Rather then only modeling discriminative posterior, $p(y | c, x)$ represents another discriminative model conditional of knowing results of unsupervised learning. 
+This term is formulated as a neural network, with simplest form a softmax regression. In practice we apply this framework in the context of language modeling and text classification, where $p(c | f_W(x))$ is specified by a softmax regression with cluster dependent weightings on the vocabulary words. 
+
+Intuitively, we create more flexibility or specialization in the label classification model by making it dependent on the clustering algorithm. We can see unsupervised clustering as being used to dynamically route the problem, in the context of language models. to different topics or word collections. This algorithm is loosely related to the mixture-of-experts paradigm, 
+where we rely on the clustering algorithm, and the dependency between label classification and cluster assignment to route data-points to separate labeling experts. 
+
+In more detail, the routing of mixture-of-experts is done using the $p(c | f_W(x))$. This term can be specified using a softmax function weighted by euclidean distances to the centroids, similar to equation~\ref{nca_softmax}: 
+
+\begin{equation} 
+p(y | c^{(k)}, f_W(x)) = \frac{\exp(-d_{\{c^{(k)}, f_W(x)\}})}{\sum_{j\in \{\mathbf{c}\}} \exp(-d_{\{c^{(j)}, f_W(x)\}})} 
+\end{equation} 
+%p_{ab} = \frac{\exp(-d_{ab})}{\sum_{z\neg a} \exp(-d_{az})}, p_{aa} =0 
+
+The counter part of this algorithm will be to marginalize out $y$: 
+
+\begin{align} 
+\label{c_y_depend_equation} 
+p(c | x) &= \sum_y p(y, c | \hat{x}) \\
+	    &= \sum_y p(c | y, \hat{x}) p(y | \hat{x}) \\ 
+	    &= \sum_y p(c | y, f_W(x)) p(y | f_W(x)) 
+\end{align} 
+
+How does supervised learning in return help unsupervised so that the algorithm is balanced? one way is have a neural 
+network to model class-specific assignment functions $p(c | y, f_W(x))$, so that the $p(c | x)$ quantity can written as a 
+linear combination of classifier probability $p(y | f_W(x))$ and the cluster assignment function. The class-dependent assignment function
+is learned the same way as k-means projection layers. 
+
+Consider the cost of if two data points belong to the same class (centroid) in one problem, but may or may not 
+belong to the same class for the other problem. Can we utilize or incorporate this cost function for semi-supervised 
+or multi-task learning problems? 
+
+All in all, the loop-EM algorithm can be used to optimize for $p(y | x)$ and $p(c | x)$ iteratively. Intuitively, the supervised discriminative model and 
+unsupervised algorithms can be improved in a alternate, iterative fashion. 
+
+\section{Experiments} 
+%To verify this algorithm I am performing experiments on color image 
+%datasets such as CIFAR. To start-of I have already initialized the 
+%CIFAR images into a first set of kmeans clusters, by running K-means 
+%on the resized original images. Next, we could then run the deep 
+%K-means algorithm and observe what are the improvements in terms of 
+%classification, using the features trained with the convolutional 
+%neural networks. [Results to come] 
+
+We perform experiments on the IMDB dataset for sentiment classification. The algorithm we adopt for the base model as $f_W(x)$ is multi-layer LSTMs with word embedding representations. On the LSTMs, unsupervised learning to determine $p(c|f_W(x))$ in Equation~\ref{y_c_depend_equation} is performed using k-means clustering described in Section~\ref{kmeans_net_projection}. The learning algorithm performs initially random assignments to $c$, then iteratively optimize for the best solution for projection network using the NCA objective function. 
+
+In this sub-section of our algorithm, we differentiate ourselves to prior art for using deep learning clustering algorithm, by first, we adopt a completely different model and data modality, with multi-layer LSTMs to learn on text inputs, and second, applying a different algorithm NCA as opposed to label classification. Finally, we adopt this unsupervised learning step as part of our algorithm to explicitly define the dependency framework elaborated in Equation~\ref{y_c_depend_equation}, and learn the framework as a complete model. 
+
+The $p(y | c, f_W(x))$ term in Equation~\ref{y_c_depend_equation} is specified in two ways. We first try to define the term with a separately parameterized softmax regression function, and use other auxiliary parameters $b$ for topic word probabilities and parameters in the variational auto-encoder in~\cite{topicrnnn}. 
+
+\bibliography{deeplearning} 
+\bibliographystyle{icml2014} 
+
+\end{document} 
+
+% This document was modified from the file originally made available by
+% Pat Langley and Andrea Danyluk for ICML-2K. This version was
+% created by Lise Getoor and Tobias Scheffer, it was slightly modified  
+% from the 2010 version by Thorsten Joachims & Johannes Fuernkranz, 
+% slightly modified from the 2009 version by Kiri Wagstaff and 
+% Sam Roweis's 2008 version, which is slightly modified from 
+% Prasad Tadepalli's 2007 version which is a lightly 
+% changed version of the previous year's version by Andrew Moore, 
+% which was in turn edited from those of Kristian Kersting and 
+% Codrina Lauth. Alex Smola contributed to the algorithmic style files.  
