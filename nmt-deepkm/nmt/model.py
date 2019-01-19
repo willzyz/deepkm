@@ -345,6 +345,17 @@ class BaseModel(object):
                                    batch_size=self.batch_size)
     return sess.run(output_tuple)
 
+  def build_kmeans_graph(self, hparams, scope=None):
+    print('hello')
+    
+    with tf.variable_scope("kmeans_project_lstm", dtype=self.dtype):
+      self.encoder_outputs, encoder_state = self._build_encoder_km(hparams)
+    
+    if self.mode != tf.contrib.learn.ModeKeys.INFER:
+      loss  = self._compute_nca_loss(encoder_outputs)
+    
+    return loss
+  
   def build_graph(self, hparams, scope=None):
     """Subclass must implement this method.
 
@@ -573,7 +584,7 @@ class BaseModel(object):
               decoder_initial_state,
               output_layer=self.output_layer  # applied per timestep
           )
-
+        
         # Dynamic decoding
         outputs, final_context_state, _ = tf.contrib.seq2seq.dynamic_decode(
             my_decoder,
@@ -793,19 +804,19 @@ class Model(BaseModel):
 
     return encoder_outputs, encoder_state
 
-  def _build_encoder(self, hparams):
-    """Build encoder from source."""
-    utils.print_out("# Build a basic encoder")
-    return self._build_encoder_from_sequence(
-        hparams, self.iterator.source, self.iterator.source_sequence_length)
-
-  def _build_bidirectional_rnn(self, inputs, sequence_length,
-                               dtype, hparams,
-                               num_bi_layers,
-                               num_bi_residual_layers,
-                               base_gpu=0):
-    """Create and call biddirectional RNN cells.
-
+  def _build_encoder(self, hparams): 
+    """Build encoder from source.""" 
+    utils.print_out("# Build a basic encoder") 
+    return self._build_encoder_from_sequence( 
+        hparams, self.iterator.source, self.iterator.source_sequence_length) 
+  
+  def _build_bidirectional_rnn(self, inputs, sequence_length, 
+                               dtype, hparams, 
+                               num_bi_layers, 
+                               num_bi_residual_layers, 
+                               base_gpu=0): 
+    """Create and call biddirectional RNN cells. 
+    
     Args:
       num_residual_layers: Number of residual layers from top to bottom. For
         example, if `num_bi_layers=4` and `num_residual_layers=2`, the last 2 RNN
@@ -814,11 +825,12 @@ class Model(BaseModel):
         i-th forward RNN layer will use `(base_gpu + i) % num_gpus` as its
         device id. The `base_gpu` for backward RNN cell is `(base_gpu +
         num_bi_layers)`.
-
+    
     Returns:
       The concatenated bidirectional output and the bidirectional RNN cell"s
       state.
     """
+    
     # Construct forward and backward cells
     fw_cell = self._build_encoder_cell(hparams,
                                        num_bi_layers,

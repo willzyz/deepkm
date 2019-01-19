@@ -50,6 +50,3 @@ class IMDBConfig:
   generate_text=True
   cell_type = 'lstm'
 
-
-
-

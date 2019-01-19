@@ -119,27 +119,18 @@ class TopicRNN:
     self.compute_cross_entropy()
     #optimizer and gradients
     trainable_vars = tf.trainable_variables()
-
+    
     grads, _ = tf.clip_by_global_norm(
     			        tf.gradients(self.loss, trainable_vars), 
     				        self.max_grad_norm)
     optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
     self.optim = optimizer.apply_gradients(zip(grads, trainable_vars), 
     				      global_step=self.step)
-
+    
     #tf.scalar_summary("learning rate", self.lr)
   
-  def run_kmeans(self, X, centroids, assignments):
+  def forward_data(self, ):
     print('hello world') 
-    ## performs iterative kmeans algorithm 
-    
-    # re-evaluate centroids 
-    
-    # re-assign data to centroids 
-    
-    # let's set the above sequence for now, but can change later 
-    
-    # how do we whiten the data? 
     
   def build_unsupervised_model(self):
     ## logic 
@@ -163,7 +154,7 @@ class TopicRNN:
     self.compute_cross_entropy()
     #optimizer and gradients
     trainable_vars = tf.trainable_variables()
-
+    
     grads, _ = tf.clip_by_global_norm(
     			        tf.gradients(self.loss, trainable_vars), 
     				        self.max_grad_norm)
@@ -248,7 +239,7 @@ class TopicRNN:
       self.b = tf.get_variable("b", [self.vocab_size])
       Gamma = tf.get_variable("Gamma", [self.n_hidden])
       self.B = tf.get_variable("B", [self.lda_vocab_size, self.n_topics])
-
+      
       logits = tf.matmul(output, self.V) + self.b
       self.logits = logits
       self.logits_stops = logits_stops = logits[:, self.lda_vocab_size : self.vocab_size]
@@ -527,3 +518,28 @@ class TopicRNN:
     output = [self.reader.idx2word[word_idx] for word_idx in tokens]
 
     return output
+  
+  def get_hs_from_datatype(self, iterator, sess):
+    h_list = []
+    for i in range(25000):
+      print("i: {}".format(i))
+      X, Xc = iterator[0].next()
+      Y, L, seq_len, n_batch = iterator[1].next()
+      if n_batch == 0: continue
+      feed_dict = \
+            {self._X: X,
+             self._Xc: Xc,
+             self._Y: Y,
+             self._L: L,
+             self._seq_len: seq_len,
+             self._n_batch: n_batch}
+      h_i, h_prime_i = sess.run([self.final_state, self.theta], feed_dict=feed_dict)
+      
+      #pick the last state and concatenate with topics
+      n_topics = self.n_topics
+      vect = list(h_i[len(h_i)-1][0]) + list(np.reshape(h_prime_i, [n_topics])) 
+      h_list.append(vect)
+    
+    h_list = np.array(h_list)
+    
+    return h_list

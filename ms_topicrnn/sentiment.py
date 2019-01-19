@@ -2,6 +2,7 @@
 #use a config file or FLAGS
 #use checkpoints to save session for later use
 #use summarywriter for tensorboard visualization
+
 import tensorflow as tf
 import numpy as np
 import matplotlib
@@ -57,13 +58,13 @@ def network_classifier(config, htrain_list, labelstrain_list,
 
   layer_1 = tf.add(tf.matmul(x, weight_in), bias_in)
   layer_1 = tf.sigmoid(layer_1)
-
+  
   pred = tf.add(tf.matmul(layer_1, weight_out), bias_out)
-
+  
   # Define loss and optimizer
-  cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(pred, y))
+  cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=y))
   optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
-
+  
   # Initializing the variables
   init = tf.initialize_all_variables()
 
@@ -108,12 +109,21 @@ def get_hs_from_datatype(model, iterator, sess):
     Y, L, seq_len, n_batch = iterator[1].next()
     if n_batch == 0: continue
     feed_dict = \
+            {_X: X,
+             _Xc: Xc,
+             _Y: Y,
+             _L: L,
+             _seq_len: seq_len,
+             _n_batch: n_batch}
+    """
+    feed_dict = \
             {self._X: X,
              self._Xc: Xc,
              self._Y: Y,
              self._L: L,
              self._seq_len: seq_len,
              self._n_batch: n_batch}
+    """
     h_i, h_prime_i = sess.run([model.final_state, model.theta], feed_dict=feed_dict)
     
     #pick the last state and concatenate with topics
@@ -128,24 +138,25 @@ def get_hs_from_datatype(model, iterator, sess):
 def main(_):
   config = IMDBConfig()
   reader = IMDBReader(config)
-
+  
   with tf.Session() as sess:
     model = TopicRNN(sess, config, reader)
-
+    
     if config.forward_only:
       model.load(config.checkpoint_dir)
-
+    
     else:
       model.train(config)
-
+    
     #run classification and compute error rate
     train_labelled_iterator = reader.iterator(data_type='train_labelled')
     test_iterator = reader.iterator(data_type='test')
-
+    
     if not os.path.exists('./data/imdb/htrain_list.pkl'):
-      htrain_list = get_hs_from_datatype(model, train_labelled_iterator, sess)
+      #htrain_list = get_hs_from_datatype(model, train_labelled_iterator, sess)
+      htrain_list = model.get_hs_from_datatype(train_labelled_iterator, sess)      
       save_pkl('./data/imdb/htrain_list.pkl', htrain_list)
-      htest_list = get_hs_from_datatype(model, test_iterator, sess)
+      htest_list = model.get_hs_from_datatype(test_iterator, sess)
       save_pkl('./data/imdb/htest_list.pkl', htrain_list)
 
     else:
@@ -154,6 +165,12 @@ def main(_):
 
     labelstrain_list = load_pkl('./data/imdb/train_labelled_labels.pkl')#reader.train_labelled_labels
     labelstest_list = load_pkl('./data/imdb/test_labels.pkl')#reader.test_labels
+
+    htrain_list = htrain_list.tolist()
+    #labelstrain_list = labelstrain_list.tolist()
+    htest_list = htest_list.tolist()
+    #labelstest_list = labelstest_list.tolist()
+    
     network_classifier(config, htrain_list, labelstrain_list, htest_list, labelstest_list)
 
     #visualize topics...

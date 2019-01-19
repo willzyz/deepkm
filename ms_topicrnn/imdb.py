@@ -162,12 +162,16 @@ class IMDBReader(object):
 
     self.X_valid_data = load_pkl(self.data_path+'/'+'X_valid'+'.pkl')
     self.Y_valid_data = load_pkl(self.data_path+'/'+'Y_valid'+'.pkl')
-
-    self.X_test_data = load_pkl(self.data_path+'/'+'X_test'+'.pkl')
-    self.X_train_labelled_data = load_pkl(self.data_path+'/'+'X_train_labelled'+'.pkl')
     
-    self.train_labelled_labels = load_pkl(self.data_path+'/'+'train_labelled_labels' +'.pkl')
+    self.X_test_data = load_pkl(self.data_path+'/'+'X_test'+'.pkl')
+    self.Y_test_data = load_pkl(self.data_path+'/'+'Y_test'+'.pkl')
+    
     self.test_labels = load_pkl(self.data_path+'/'+'test_labels' +'.pkl')
+    
+    self.X_train_labelled_data = load_pkl(self.data_path+'/'+'X_train_labelled'+'.pkl')
+    self.Y_train_labelled_data = load_pkl(self.data_path+'/'+'Y_train_labelled'+'.pkl')        
+    self.train_labelled_labels = load_pkl(self.data_path+'/'+'train_labelled_labels' +'.pkl')
+
 
   def get_data_from_type(self, data_type):
     if data_type == "train":
@@ -182,7 +186,10 @@ class IMDBReader(object):
     elif data_type == "train_labelled":
       X_raw_data = self.X_train_labelled_data
       Y_raw_data = self.Y_train_labelled_data
-
+      print(X_raw_data.shape)
+      print(len(X_raw_data[0]))
+      print(len(Y_raw_data))
+      
     else:
       raise Exception(" [!] Unkown data type %s: %s" % data_type)
 
