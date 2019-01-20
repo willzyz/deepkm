@@ -6,6 +6,10 @@ import numpy as np
 ## toolket of functions used to implement deep-kmeans algorithm 
 ## and implement dynamic routing 
 
+## subcomponents tested ...
+## next steps: test the assignment function
+## next next steps: integrate with NMT code
+
 def preprocess_features(npdata, pca=256):
     """Preprocess an array of features.
     Args:

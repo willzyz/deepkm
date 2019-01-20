@@ -132,6 +132,31 @@ def create_train_model(
       iterator=iterator,
       skip_count_placeholder=skip_count_placeholder)
 
+def get_dkm_batch_iterator(train_dataset, hparams, dataset_size):
+  vocab_file = hparams.dkm_vocab_file
+  
+  vocab_table,  = vocab_utils.create_vocab_tables(
+    vocab_file, vocab_file, True)
+  
+  skip_count_placeholder = tf.placeholder(shape=(), dtype=tf.int64)
+  
+  iterator = iterator_utils.get_dkm_batch_iterator(
+    train_dataset,
+    vocab_table,
+    dataset_size,
+    sos=hparams.sos,
+    eos=hparams.eos,
+    random_seed=hparams.random_seed,
+    num_buckets=hparams.num_buckets,
+    src_max_len=hparams.src_max_len,
+    tgt_max_len=hparams.tgt_max_len,
+    skip_count=skip_count_placeholder,
+    num_shards=num_workers,
+    shard_index=jobid,
+    use_char_encode=hparams.use_char_encode)
+  
+  return iterator 
+
 def create_deepkm_train_model(
     hparams, iterator, scope=None, num_workers=1, jobid=0,
     extra_args=None):
@@ -139,35 +164,10 @@ def create_deepkm_train_model(
   ## thus create a matching iterator for
   
   """Create train graph, model, and iterator."""
-  vocab_file = hparams.dkm_vocab_file
   
   graph = tf.Graph()
   
-  with graph.as_default(), tf.container(scope or "train_dkm"):
-    """
-    vocab_table,  = vocab_utils.create_vocab_tables(
-        vocab_file, vocab_file, True)
-    
-    skip_count_placeholder = tf.placeholder(shape=(), dtype=tf.int64)
-
-    iterator = iterator_utils.get_iterator(
-        src_dataset,
-        tgt_dataset,
-        src_vocab_table,
-        tgt_vocab_table,
-        batch_size=hparams.batch_size,
-        sos=hparams.sos,
-        eos=hparams.eos,
-        random_seed=hparams.random_seed,
-        num_buckets=hparams.num_buckets,
-        src_max_len=hparams.src_max_len,
-        tgt_max_len=hparams.tgt_max_len,
-        skip_count=skip_count_placeholder,
-        num_shards=num_workers,
-        shard_index=jobid,
-        use_char_encode=hparams.use_char_encode)
-    """
-    
+  with graph.as_default(), tf.container(scope or "train_dkm"):    
     # Note: One can set model_device_fn to
     # `tf.train.replica_device_setter(ps_tasks)` for distributed training.
     model_device_fn = None

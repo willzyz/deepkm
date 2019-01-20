@@ -471,10 +471,12 @@ def train_deepkmeans(hparams, scope=None, target_session=""):
   
   ## for loop step: iteratively train the model using session.run(model-finetune-update) 
   ## } 
-
-  DataAllSequences = tf.data.TextLineDataset(tf.gfile.Glob(hparams.dkm_train_data_file))
-
-  dkm_batch_iterator = iterator_utils.get_dkm_batch_iterator(DataAllSequences)
+  
+  DataAllSequences = tf.data.TextLineDataset(tf.gfile.Glob(hparams.dkm_train_data_file)) 
+  
+  dataset_size = DataAllSequences.get_size()
+  
+  dkm_batch_iterator = model_helper.get_dkm_batch_iterator(DataAllSequences, hparams, dataset_size)
   
   dkm_model = model_helper.create_deepkm_train_model()
   
