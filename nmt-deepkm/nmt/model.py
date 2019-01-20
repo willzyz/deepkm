@@ -359,20 +359,26 @@ class BaseModel(object):
                                    batch_size=self.batch_size)
     return sess.run(output_tuple)
 
-  def _compute_nca_loss(encoder_state, centroids):
+  def _compute_nca_loss(encoder_state, centroids, assignments):
     
-    final_cell_state = encoder_state[self.num_layers] 
+    ## defines the NCA objective for euclidean distance
+    ## weighted softmax winner-take all normalization
+    ## then compute the cross-entropy loss with assignments as labels
+    
+    final_cell_state = encoder_state[self.num_layers]    
     h = final_cell_state['h'] 
     
-    ## this should be of size [batch_size, hidden_dim] 
+    ## this should be of size [batch_size, hidden_dim]    
     h = tf.reshape(h, [h.shape[0], h.shape[1], 1]) 
+
+    ## compute distance using euclidean dist squared 
+    dist_sq = tf.reduce_sum(tf.square(tf.add( centroids, tf.negative(h) )), axis = 0)
+
+    ## loss using tf softmax with cross entropy 
+    loss = tf.softmax_with_cross_entropy_loss(dist_sq, .., assignments) 
     
-    tf.reduce_sum(tf.square(tf.add( centroids, tf.negative(h) )), axis = 0)
-  
-  def set_km_centroids(centroids): 
-    ## ensure centroids are of size [1, hidden_dim, num_centroids] 
-    self.centroids = centroids
-  
+    return loss 
+    
   def build_km_encoder_graph(self, hparams, scope=None): 
     print('building kmeans encoder graph') 
     
