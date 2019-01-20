@@ -82,7 +82,7 @@ def get_infer_iterator(src_dataset,
         padding_values=(
             src_eos_id,  # src
             0))  # src_len -- unused
-
+  
   batched_dataset = batching_func(src_dataset)
   batched_iter = batched_dataset.make_initializable_iterator()
   (src_ids, src_seq_len) = batched_iter.get_next()
@@ -112,7 +112,8 @@ def get_iterator(src_dataset,
                  num_shards=1,
                  shard_index=0,
                  reshuffle_each_iteration=True,
-                 use_char_encode=False):
+                 use_char_encode=False):  
+  
   if not output_buffer_size:
     output_buffer_size = batch_size * 1000
 
