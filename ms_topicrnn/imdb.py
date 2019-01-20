@@ -139,7 +139,7 @@ class IMDBReader(object):
     self.vocab = vocab
     print("official vocab length: ", len(vocab))
     save_pkl(vocab_path, self.vocab)
-
+  
   def _file_to_data(self, data, data_type):
     tokenized_docs = [nltk.sent_tokenize(x.decode('utf-8').lower()) for x in data]
     tokenized_docs = [[nltk.word_tokenize(sent) for sent in doc] for doc in tokenized_docs]
@@ -149,12 +149,12 @@ class IMDBReader(object):
     Y = [[sent[1:] for sent in doc] for doc in clean_tokenized_docs]
     X = np.asarray([[map(self.vocab.get, sent) for sent in doc] for doc in X])
     Y = np.asarray([[map(self.vocab.get, sent) for sent in doc] for doc in Y])
-
+    
     save_pkl(self.data_path+'/'+'X_'+data_type+'.pkl', X)
     save_pkl(self.data_path+'/'+'Y_'+data_type+'.pkl', Y)
-
+    
     return X, Y
-
+  
   def _load(self):
     self.vocab = load_pkl(self.vocab_path)
     self.X_train_data = load_pkl(self.data_path+'/'+'X_train'+'.pkl')

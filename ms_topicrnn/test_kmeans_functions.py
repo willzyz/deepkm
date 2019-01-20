@@ -8,6 +8,8 @@ import numpy as np
 ## Algorithm logic for performing k-means is as follows: 
 
 ## 1. forward propagate with encoder, a large sub-sample of data into latent space [2 - 3 hours] [ details: need to align the data specs coming out of encoder, feeding into kmeans ] 
+##     - build an iterator inside topic-rnn using pickle loaded data 
+##     - build a custom lstm encoder borrowing the seq2seq logic 
 
 ## 2. k-means clustering with no carry-forward initialization [ implemented ] 
 

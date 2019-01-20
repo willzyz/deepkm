@@ -444,9 +444,66 @@ def get_model_creator(hparams):
   else:
     raise ValueError("Unknown attention architecture %s" %
                      hparams.attention_architecture)
-  return model_creator
+  return model_creator 
 
+def train_deepkmeans(hparams, scope=None, target_session=""): 
+  
+  ## logic: 
+  
+  ## create the model and build the graph with both h-output as session-run target 
+  ## and with nca objective and update as session-run target
+  
+  ## create a textlinedataset [DataAllSequences] with all text data 
+  
+  ## for loop epoch: {
+  
+  ## forward propagate the whole dataset DataAllSequences through 
+  ## the model [session.run(h-output)] to obtain HvecAllSequences 
+  
+  ## perform pca and k-means on the numpy array of hidden embedding 
+  ## data and obtain centroids and cluster assignments, we can use a large set, e.g. 5000 
+  ## at first for language model word prediction routing. (Later, consider a small set, e.g. 50 for
+  ## sentiment classification routing) 
+  
+  ## create a zipped dataset [ZippedClusDataset] across 
+  ## [DataAllSequences, Centroids, ClusterAssignment] 
+  ## and create an iterator [FinetuneClusIterator] for iterative gd optimization 
+  
+  ## for loop step: iteratively train the model using session.run(model-finetune-update) 
+  ## } 
 
+  DataAllSequences = tf.data.TextLineDataset(tf.gfile.Glob(hparams.dkm_train_data_file))
+
+  dkm_batch_iterator = iterator_utils.get_dkm_batch_iterator(DataAllSequences)
+  
+  dkm_model = model_helper.create_deepkm_train_model()
+  
+  """  
+  
+  dkm_model.reset_iterator(dkm_batch_iterator) 
+
+  global_steps = 0
+  for epoch in range(hparams.dkm_max_epochs):
+    ##---- for epoch loop ---- 
+    HvecAllSequences = sess.run(dkm_model.h_output)
+    
+    Centroids, ClusterAssignment = kmtools.Run_PCA_Kmeans(HvecAllSequences, hparams.dkm_num_centroids)
+    ZippedClusDataset = tf.data.Dataset.zip((DataAllSequences, Centroids, ClusterAssignment))
+    
+    dkm_ft_iterator = iterator_utils.get_dkm_finetune_iterator(ZippedClusDataset)
+    
+    dkm_model.reset_iterator(dkm_ft_iterator)
+    
+    for step in range(hparams.dkm_num_steps_per_epoch): ## epoch_size * 1.0 / batch_size 
+      sess.run(dkm_model.finetune_update); global_steps = global_steps + 1
+      if global_steps % hparams.dkm_print_every == 0:
+        print('--- DKM optimize global fine-tune step: ' + str(global_steps) + ' ---') 
+    
+    dkm_model.save_model_ckpt()
+
+  return global_steps  
+  """
+  
 def train(hparams, scope=None, target_session=""):
   """Train a translation model."""
   log_device_placement = hparams.log_device_placement

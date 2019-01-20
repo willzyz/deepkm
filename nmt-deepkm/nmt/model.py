@@ -90,7 +90,7 @@ class BaseModel(object):
     # Not used in general seq2seq models; when True, ignore decoder & training
     self.extract_encoder_layers = (hasattr(hparams, "extract_encoder_layers")
                                    and hparams.extract_encoder_layers)
-
+    
     # Train graph
     res = self.build_graph(hparams, scope=scope)
     if not self.extract_encoder_layers:
@@ -323,7 +323,7 @@ class BaseModel(object):
          tf.summary.scalar("train_loss", self.train_loss)] +
         self.grad_norm_summary)
     return train_summary
-
+  
   def train(self, sess):
     """Execute train graph."""
     assert self.mode == tf.contrib.learn.ModeKeys.TRAIN
@@ -336,7 +336,21 @@ class BaseModel(object):
                                     grad_norm=self.grad_norm,
                                     learning_rate=self.learning_rate)
     return sess.run([self.update, output_tuple])
-
+  
+  ## backing-up original train function 
+  def train_orig(self, sess): 
+    """Execute train graph."""
+    assert self.mode == tf.contrib.learn.ModeKeys.TRAIN
+    output_tuple = TrainOutputTuple(train_summary=self.train_summary,
+                                    train_loss=self.train_loss,
+                                    predict_count=self.predict_count,
+                                    global_step=self.global_step,
+                                    word_count=self.word_count,
+                                    batch_size=self.batch_size,
+                                    grad_norm=self.grad_norm,
+                                    learning_rate=self.learning_rate)
+    return sess.run([self.update, output_tuple])
+  
   def eval(self, sess):
     """Execute eval graph."""
     assert self.mode == tf.contrib.learn.ModeKeys.EVAL
@@ -345,16 +359,27 @@ class BaseModel(object):
                                    batch_size=self.batch_size)
     return sess.run(output_tuple)
 
-  def build_kmeans_graph(self, hparams, scope=None):
-    print('hello')
+  def _compute_nca_loss(encoder_state, centroids):
     
-    with tf.variable_scope("kmeans_project_lstm", dtype=self.dtype):
-      self.encoder_outputs, encoder_state = self._build_encoder_km(hparams)
+    final_cell_state = encoder_state[self.num_layers] 
+    h = final_cell_state['h'] 
     
-    if self.mode != tf.contrib.learn.ModeKeys.INFER:
-      loss  = self._compute_nca_loss(encoder_outputs)
+    ## this should be of size [batch_size, hidden_dim] 
+    h = tf.reshape(h, [h.shape[0], h.shape[1], 1]) 
     
-    return loss
+    tf.reduce_sum(tf.square(tf.add( centroids, tf.negative(h) )), axis = 0)
+  
+  def set_km_centroids(centroids): 
+    ## ensure centroids are of size [1, hidden_dim, num_centroids] 
+    self.centroids = centroids
+  
+  def build_km_encoder_graph(self, hparams, scope=None): 
+    print('building kmeans encoder graph') 
+    
+    with tf.variable_scope("kmeans_lstm", dtype=self.dtype):
+      self.encoder_outputs, encoder_state = self._build_encoder(hparams)
+    
+    return self.encoder_outputs, encoder_state 
   
   def build_graph(self, hparams, scope=None):
     """Subclass must implement this method.
@@ -488,7 +513,7 @@ class BaseModel(object):
       # are using.
       logits = tf.no_op()
       decoder_cell_outputs = None
-
+      
       ## Train or eval
       if self.mode != tf.contrib.learn.ModeKeys.INFER:
         # decoder_emp_inp: [max_time, batch_size, num_units]
@@ -757,7 +782,7 @@ class Model(BaseModel):
 
       self.encoder_emb_inp = self.encoder_emb_lookup_fn(
           self.embedding_encoder, sequence)
-
+      
       # Encoder_outputs: [max_time, batch_size, num_units]
       if hparams.encoder_type == "uni":
         utils.print_out("  num_layers = %d, num_residual_layers=%d" %
