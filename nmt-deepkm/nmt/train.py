@@ -470,15 +470,56 @@ def train_deepkmeans(hparams, scope=None, target_session=""):
   ## and create an iterator [FinetuneClusIterator] for iterative gd optimization 
   
   ## for loop step: iteratively train the model using session.run(model-finetune-update) 
-  ## } 
+  ## }   
   
-  DataAllSequences = tf.data.TextLineDataset(tf.gfile.Glob(hparams.dkm_train_data_file)) 
+  model_creator = get_model_creator(hparams)
   
-  dataset_size = DataAllSequences.get_size()
+  dkm_forward_model = model_helper.create_deepkm_train_model(model_creator, hparams, scope=scope) 
   
-  dkm_batch_iterator = model_helper.get_dkm_batch_iterator(DataAllSequences, hparams, dataset_size)
+  # TensorFlow model
+  config_proto = utils.get_config_proto(
+      log_device_placement=hparams.log_device_placement,
+      num_intra_threads=hparams.num_intra_threads,
+      num_inter_threads=hparams.num_inter_threads)
   
-  dkm_model = model_helper.create_deepkm_train_model()
+  train_forward_sess = tf.Session(
+      target=target_session, config=config_proto, graph=dkm_forward_model.graph)
+  
+  ## later: create a batching algorithm to forward propagate the data
+  
+  with dkm_forward_model.graph.as_default(): 
+    train_forward_sess.run(tf.global_variables_initializer())
+    train_forward_sess.run(tf.tables_initializer())
+    train_forward_sess.run(dkm_forward_model.iterator.initializer)
+    data_seq_lens, result_outputs, result_state = train_forward_sess.run(
+      [dkm_forward_model.iterator.source_sequence_length, 
+       dkm_forward_model.model.km_encoder_outputs, 
+       dkm_forward_model.model.km_encoder_state])    
+  
+  #indices = raw_ids_data[1]
+  g = tf.Graph()
+  with g.as_default(): 
+    num_samples = hparams.dkm_dataset_size
+    index_0 = tf.reshape(data_seq_lens, [1, 50000, 1])
+    index_0 = tf.add(index_0, -1)
+    index_1 = tf.reshape(tf.range(num_samples), [1, num_samples, 1])
+    index = tf.squeeze(tf.stack([index_0, index_1], axis=2), [3])
+    res = tf.gather_nd(result_outputs, index)
+    res = tf.squeeze(res)
+  
+  temp_sess = tf.Session(config=config_proto, graph=g)
+  with g.as_default():
+    res_val = temp_sess.run(res)
+
+  import ipdb; ipdb.set_trace()    
+
+  from kmtools import Kmeans
+  KM = Kmeans(50)
+  assignment, loss = KM.cluster(res_val)
+  print('loss: ' + str(loss)) 
+  print(assignment)
+  
+  import ipdb; ipdb.set_trace()  
   
   """  
   

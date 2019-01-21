@@ -91,15 +91,15 @@ class BaseModel(object):
     self.extract_encoder_layers = (hasattr(hparams, "extract_encoder_layers")
                                    and hparams.extract_encoder_layers)
     
-    # Train graph
-    res = self.build_graph(hparams, scope=scope)
-    if not self.extract_encoder_layers:
-      self._set_train_or_infer(res, reverse_target_vocab_table, hparams)
+    # Train graph 
+    self.km_encoder_outputs, self.km_encoder_state = self.build_km_encoder_graph(hparams, scope=scope)
+    #if not self.extract_encoder_layers:
+    #  self._set_train_or_infer(res, reverse_target_vocab_table, hparams)
 
     # Saver
-    self.saver = tf.train.Saver(
-        tf.global_variables(), max_to_keep=hparams.num_keep_ckpts)
-
+    #self.saver = tf.train.Saver(
+    #    tf.global_variables(), max_to_keep=hparams.num_keep_ckpts)
+  
   def _set_params_initializer(self,
                               hparams,
                               mode,
@@ -109,7 +109,7 @@ class BaseModel(object):
                               scope,
                               extra_args=None):
     """Set various params for self and initialize."""
-    assert isinstance(iterator, iterator_utils.BatchedInput)
+    assert isinstance(iterator, iterator_utils.BatchedInput) or isinstance(iterator, iterator_utils.KMBatchedFullInput)
     self.iterator = iterator
     self.mode = mode
     self.src_vocab_table = source_vocab_table
@@ -173,22 +173,27 @@ class BaseModel(object):
     if self.mode == tf.contrib.learn.ModeKeys.TRAIN:
       self.train_loss = res[1]
       self.word_count = tf.reduce_sum(
+          self.iterator.source_sequence_length)      
+      """
+      self.word_count = tf.reduce_sum(
           self.iterator.source_sequence_length) + tf.reduce_sum(
               self.iterator.target_sequence_length)
+      """
     elif self.mode == tf.contrib.learn.ModeKeys.EVAL:
       self.eval_loss = res[1]
     elif self.mode == tf.contrib.learn.ModeKeys.INFER:
       self.infer_logits, _, self.final_context_state, self.sample_id = res
       self.sample_words = reverse_target_vocab_table.lookup(
           tf.to_int64(self.sample_id))
-
+    """
     if self.mode != tf.contrib.learn.ModeKeys.INFER:
       ## Count the number of predicted words for compute ppl.
       self.predict_count = tf.reduce_sum(
           self.iterator.target_sequence_length)
-
+    """
+    
     params = tf.trainable_variables()
-
+    
     # Gradients and SGD update operation for training the model.
     # Arrange for the embedding vars to appear at the beginning.
     if self.mode == tf.contrib.learn.ModeKeys.TRAIN:
@@ -205,7 +210,7 @@ class BaseModel(object):
         opt = tf.train.AdamOptimizer(self.learning_rate)
       else:
         raise ValueError("Unknown optimizer type %s" % hparams.optimizer)
-
+      
       # Gradients
       gradients = tf.gradients(
           self.train_loss,
@@ -337,20 +342,6 @@ class BaseModel(object):
                                     learning_rate=self.learning_rate)
     return sess.run([self.update, output_tuple])
   
-  ## backing-up original train function 
-  def train_orig(self, sess): 
-    """Execute train graph."""
-    assert self.mode == tf.contrib.learn.ModeKeys.TRAIN
-    output_tuple = TrainOutputTuple(train_summary=self.train_summary,
-                                    train_loss=self.train_loss,
-                                    predict_count=self.predict_count,
-                                    global_step=self.global_step,
-                                    word_count=self.word_count,
-                                    batch_size=self.batch_size,
-                                    grad_norm=self.grad_norm,
-                                    learning_rate=self.learning_rate)
-    return sess.run([self.update, output_tuple])
-  
   def eval(self, sess):
     """Execute eval graph."""
     assert self.mode == tf.contrib.learn.ModeKeys.EVAL
@@ -359,6 +350,7 @@ class BaseModel(object):
                                    batch_size=self.batch_size)
     return sess.run(output_tuple)
 
+  """
   def _compute_nca_loss(encoder_state, centroids, assignments):
     
     ## defines the NCA objective for euclidean distance
@@ -378,13 +370,17 @@ class BaseModel(object):
     loss = tf.softmax_with_cross_entropy_loss(dist_sq, .., assignments) 
     
     return loss 
-    
-  def build_km_encoder_graph(self, hparams, scope=None): 
+  """
+  
+  def build_km_encoder_graph(self, hparams, scope=None):  
     print('building kmeans encoder graph') 
     
-    with tf.variable_scope("kmeans_lstm", dtype=self.dtype):
+    #with tf.variable_scope(scope or "kmeans_lstm", dtype=self.dtype):
+
+    with tf.variable_scope(scope or "dynamic_seq2seq", dtype=self.dtype):      
       self.encoder_outputs, encoder_state = self._build_encoder(hparams)
     
+    #self.train_loss = _compute_nca_loss()
     return self.encoder_outputs, encoder_state 
   
   def build_graph(self, hparams, scope=None):

@@ -1,0 +1,5 @@
+## a hack to preload mkl libraries
+## due to conda and pip inconsistencies
+## have tried re-install numpy, scipy, sklearn and faiss through conda
+
+export LD_PRELOAD=/home/will/miniconda2/lib/libmkl_def.so:/home/will/miniconda2/lib/libmkl_avx.so:/home/will/miniconda2/lib/libmkl_core.so:/home/will/miniconda2/lib/libmkl_intel_lp64.so:/home/will/miniconda2/lib/libmkl_intel_thread.so:/home/will/miniconda2/lib/libiomp5.so

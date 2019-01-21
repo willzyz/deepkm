@@ -111,7 +111,7 @@ def create_train_model(
         num_shards=num_workers,
         shard_index=jobid,
         use_char_encode=hparams.use_char_encode)
-
+    
     # Note: One can set model_device_fn to
     # `tf.train.replica_device_setter(ps_tasks)` for distributed training.
     model_device_fn = None
@@ -132,33 +132,26 @@ def create_train_model(
       iterator=iterator,
       skip_count_placeholder=skip_count_placeholder)
 
-def get_dkm_batch_iterator(train_dataset, hparams, dataset_size):
+def get_dkm_batch_iterator(train_dataset, hparams, jobid=0):
   vocab_file = hparams.dkm_vocab_file
   
-  vocab_table,  = vocab_utils.create_vocab_tables(
-    vocab_file, vocab_file, True)
+  vocab_table, _ = vocab_utils.create_vocab_tables(
+    vocab_file, vocab_file, True)  
   
-  skip_count_placeholder = tf.placeholder(shape=(), dtype=tf.int64)
-  
-  iterator = iterator_utils.get_dkm_batch_iterator(
-    train_dataset,
-    vocab_table,
-    dataset_size,
-    sos=hparams.sos,
-    eos=hparams.eos,
-    random_seed=hparams.random_seed,
-    num_buckets=hparams.num_buckets,
-    src_max_len=hparams.src_max_len,
-    tgt_max_len=hparams.tgt_max_len,
-    skip_count=skip_count_placeholder,
-    num_shards=num_workers,
-    shard_index=jobid,
-    use_char_encode=hparams.use_char_encode)
+  iterator = iterator_utils.get_dkm_batch_iterator( 
+    train_dataset, 
+    vocab_table, 
+    hparams.dkm_dataset_size, 
+    hparams.eos, 
+    src_max_len=hparams.src_max_len, 
+    num_shards=hparams.num_workers, 
+    shard_index=jobid) 
   
   return iterator 
 
 def create_deepkm_train_model(
-    hparams, iterator, scope=None, num_workers=1, jobid=0,
+    model_creator,
+    hparams, scope=None, num_workers=1, jobid=0,
     extra_args=None):
   ## use a temporary text file to store the centroids
   ## thus create a matching iterator for
@@ -166,27 +159,33 @@ def create_deepkm_train_model(
   """Create train graph, model, and iterator."""
   
   graph = tf.Graph()
+  #skip_count_placeholder = tf.placeholder(shape=(), dtype=tf.int64)  
   
-  with graph.as_default(), tf.container(scope or "train_dkm"):    
-    # Note: One can set model_device_fn to
+  with graph.as_default(), tf.container(scope or "train"):
+
+    DataAllSequences = tf.data.TextLineDataset(tf.gfile.Glob(hparams.dkm_train_data_file))
+    
+    dkm_batch_iterator = get_dkm_batch_iterator(DataAllSequences, hparams)
+    
+    # Note: One can set model_device_fn to 
     # `tf.train.replica_device_setter(ps_tasks)` for distributed training.
     model_device_fn = None
     if extra_args: model_device_fn = extra_args.model_device_fn
     with tf.device(model_device_fn):
       model = model_creator( #customize this 
           hparams,
-          iterator=iterator,
+          iterator=dkm_batch_iterator,
           mode=tf.contrib.learn.ModeKeys.TRAIN,
-          source_vocab_table=src_vocab_table,
-          target_vocab_table=tgt_vocab_table,
+          source_vocab_table=None, 
+          target_vocab_table=None, 
           scope=scope,
           extra_args=extra_args)
   
   return TrainModel(
       graph=graph,
       model=model,
-      iterator=iterator,
-      skip_count_placeholder=skip_count_placeholder)
+      iterator=dkm_batch_iterator,
+      skip_count_placeholder=None)
 
 
 class EvalModel(

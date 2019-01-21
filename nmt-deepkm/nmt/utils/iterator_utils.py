@@ -176,7 +176,7 @@ def get_iterator(src_dataset,
                         tf.concat(([tgt_sos_id], tgt), 0),
                         tf.concat((tgt, [tgt_eos_id]), 0)),
       num_parallel_calls=num_parallel_calls).prefetch(output_buffer_size)
-  
+ 
   # Add in sequence lengths.
   if use_char_encode:
     src_tgt_dataset = src_tgt_dataset.map(
@@ -257,23 +257,20 @@ def get_dkm_batch_iterator(
                  train_dataset,
                  vocab_table,
                  dataset_size,
+                 eos,
                  src_max_len=None,
                  num_parallel_calls=4,
-                 output_buffer_size=None,
-                 skip_count=None,
+                 output_buffer_size=None,  
                  num_shards=1,
-                 shard_index=0)
+                 shard_index=0):
   
   if not output_buffer_size:
-    output_buffer_size = batch_size * 1000
+    output_buffer_size = dataset_size * 1000 
   
   eos_id = tf.cast(vocab_table.lookup(tf.constant(eos)), tf.int32)
   
   train_dataset = train_dataset.shard(num_shards, shard_index)
-  
-  if skip_count is not None:
-    train_dataset = train_dataset.skip(skip_count)
-  
+    
   ## split the strings (according to space) into words 
   train_dataset = train_dataset.map(
       lambda src: (
@@ -282,7 +279,7 @@ def get_dkm_batch_iterator(
   
   # Filter zero length input sequences.
   train_dataset = train_dataset.filter(
-      lambda src: tf.logical_and(tf.size(src) > 0))
+      lambda src: (tf.size(src) > 0))
   
   if src_max_len:
     train_dataset = train_dataset.map(
@@ -293,7 +290,7 @@ def get_dkm_batch_iterator(
   # vocab get the lookup table's default_value integer.
   
   train_dataset = train_dataset.map( 
-        lambda src: (tf.cast(src_vocab_table.lookup(src), tf.int32)), 
+        lambda src: (tf.cast(vocab_table.lookup(src), tf.int32)), 
         num_parallel_calls=num_parallel_calls) 
   
   train_dataset = train_dataset.prefetch(output_buffer_size) 
@@ -308,7 +305,7 @@ def get_dkm_batch_iterator(
   # Bucket by source sequence length (buckets for lengths 0-9, 10-19, ...) 
   def batching_func(x): 
     return x.padded_batch( 
-        batch_size, 
+        dataset_size, 
         # The first three entries are the source and target line rows; 
         # these have unknown-length vectors.  The last two entries are 
         # the source and target row sizes; these are scalars. 
@@ -328,7 +325,9 @@ def get_dkm_batch_iterator(
   
   (src_ids, src_seq_len) = (batched_iter.get_next())
   
+  #(src_ids, src_seq_len) = batched_dataset.take(dataset_size)
+  
   return KMBatchedFullInput(
-      initializer=batched_iter.initializer,
+    initializer=batched_iter.initializer,
       source=src_ids,
       source_sequence_length=src_seq_len)

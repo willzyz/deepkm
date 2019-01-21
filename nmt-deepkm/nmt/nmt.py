@@ -45,6 +45,12 @@ def add_arguments(parser):
   """Build ArgumentParser."""
   parser.register("type", "bool", lambda v: v.lower() == "true")
 
+  # DKM
+  parser.add_argument("--dkm_train_data_file", type=str, default="", help="Text Line Training Data for Deep Kmeans.")
+  parser.add_argument("--dkm_vocab_file", type=str, default="", help="Vocabulary for imdb-topic-rnn.")   
+  parser.add_argument("--dkm_dataset_size", type=int, default=961617, help="Number of data points in Deep Kmeans Training Dataset.")
+  parser.add_argument("--dkm_vocab_size", type=int, default=5003, help="Size of train data vocabulary.") 
+  
   # network
   parser.add_argument("--num_units", type=int, default=32, help="Network size.")
   parser.add_argument("--num_layers", type=int, default=2,
@@ -311,19 +317,28 @@ def add_arguments(parser):
                       help="number of intra_op_parallelism_threads")
 
 
-def create_hparams(flags):
-  """Create training hparams."""
-  return tf.contrib.training.HParams(
-      # Data
-      src=flags.src,
-      tgt=flags.tgt,
-      train_prefix=flags.train_prefix,
-      dev_prefix=flags.dev_prefix,
-      test_prefix=flags.test_prefix,
-      vocab_prefix=flags.vocab_prefix,
-      embed_prefix=flags.embed_prefix,
-      out_dir=flags.out_dir,
-
+def create_hparams(flags): 
+  """Create training hparams.""" 
+  return tf.contrib.training.HParams( 
+      # DKM 
+      dkm_train_data_file = flags.dkm_train_data_file, 
+      dkm_dataset_size = flags.dkm_dataset_size, 
+      dkm_vocab_file = flags.dkm_vocab_file,
+      num_workers = flags.num_workers,
+      src_vocab_size = flags.dkm_vocab_size,
+      tgt_vocab_size = flags.dkm_vocab_size,
+      dkm_vocab_size = flags.dkm_vocab_size,
+      
+      # Data 
+      src=flags.src, 
+      tgt=flags.tgt, 
+      train_prefix=flags.train_prefix, 
+      dev_prefix=flags.dev_prefix, 
+      test_prefix=flags.test_prefix, 
+      vocab_prefix=flags.vocab_prefix, 
+      embed_prefix=flags.embed_prefix, 
+      out_dir=flags.out_dir, 
+      
       # Networks
       num_units=flags.num_units,
       num_encoder_layers=(flags.num_encoder_layers or flags.num_layers),
@@ -601,7 +616,7 @@ def create_or_load_hparams(
   else:
     hparams = ensure_compatible_hparams(hparams, default_hparams, hparams_path)
   hparams = extend_hparams(hparams)
-
+  
   # Save HParams
   if save_hparams:
     utils.save_hparams(out_dir, hparams)
@@ -660,44 +675,46 @@ def run_main(flags, default_hparams, train_fn, inference_fn, target_session=""):
     assert trans_file
     trans_dir = os.path.dirname(trans_file)
     if not tf.gfile.Exists(trans_dir): tf.gfile.MakeDirs(trans_dir)
-
+    
     # Inference indices
     hparams.inference_indices = None
     if flags.inference_list:
       (hparams.inference_indices) = (
           [int(token)  for token in flags.inference_list.split(",")])
-
+    
     # Inference
     ckpt = flags.ckpt
     if not ckpt:
       ckpt = tf.train.latest_checkpoint(out_dir)
     inference_fn(ckpt, flags.inference_input_file,
                  trans_file, hparams, num_workers, jobid)
+    
+    # Evaluation 
+    ref_file = flags.inference_ref_file 
+    if ref_file and tf.gfile.Exists(trans_file): 
+      for metric in hparams.metrics: 
+        score = evaluation_utils.evaluate( 
+            ref_file, 
+            trans_file, 
+            metric, 
+            hparams.subword_option) 
+        utils.print_out("  %s: %.1f" % (metric, score)) 
+  else: 
+    # Train 
+    train_fn(hparams, target_session=target_session) 
 
-    # Evaluation
-    ref_file = flags.inference_ref_file
-    if ref_file and tf.gfile.Exists(trans_file):
-      for metric in hparams.metrics:
-        score = evaluation_utils.evaluate(
-            ref_file,
-            trans_file,
-            metric,
-            hparams.subword_option)
-        utils.print_out("  %s: %.1f" % (metric, score))
-  else:
-    # Train
-    train_fn(hparams, target_session=target_session)
+#def main(unused_argv):
+#  default_hparams = create_hparams(FLAGS)
+#  train.train_deepkmeans(default_hparams) 
 
+def main(unused_argv): 
+  default_hparams = create_hparams(FLAGS) 
+  train_fn = train.train_deepkmeans 
+  inference_fn = inference.inference 
+  run_main(FLAGS, default_hparams, train_fn, inference_fn) 
 
-def main(unused_argv):
-  default_hparams = create_hparams(FLAGS)
-  train_fn = train.train
-  inference_fn = inference.inference
-  run_main(FLAGS, default_hparams, train_fn, inference_fn)
-
-
-if __name__ == "__main__":
-  nmt_parser = argparse.ArgumentParser()
-  add_arguments(nmt_parser)
-  FLAGS, unparsed = nmt_parser.parse_known_args()
-  tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)
+if __name__ == "__main__": 
+  nmt_parser = argparse.ArgumentParser() 
+  add_arguments(nmt_parser) 
+  FLAGS, unparsed = nmt_parser.parse_known_args() 
+  tf.app.run(main=main, argv=[sys.argv[0]] + unparsed) 
