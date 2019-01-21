@@ -185,7 +185,7 @@ def create_deepkm_train_model(
       graph=graph,
       model=model,
       iterator=dkm_batch_iterator,
-      skip_count_placeholder=None)
+      skip_count_placeholder=None), KM
 
 
 class EvalModel(

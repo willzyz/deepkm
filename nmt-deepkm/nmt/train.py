@@ -29,6 +29,7 @@ from . import model as nmt_model
 from . import model_helper
 from .utils import misc_utils as utils
 from .utils import nmt_utils
+from .utils import iterator_utils 
 
 utils.check_tensorflow_version()
 
@@ -470,7 +471,7 @@ def train_deepkmeans(hparams, scope=None, target_session=""):
   ## and create an iterator [FinetuneClusIterator] for iterative gd optimization 
   
   ## for loop step: iteratively train the model using session.run(model-finetune-update) 
-  ## }   
+  ## } 
   
   model_creator = get_model_creator(hparams)
   
@@ -491,10 +492,11 @@ def train_deepkmeans(hparams, scope=None, target_session=""):
     train_forward_sess.run(tf.global_variables_initializer())
     train_forward_sess.run(tf.tables_initializer())
     train_forward_sess.run(dkm_forward_model.iterator.initializer)
-    data_seq_lens, result_outputs, result_state = train_forward_sess.run(
-      [dkm_forward_model.iterator.source_sequence_length, 
+    data_sequences, data_seq_lens, result_outputs, result_state = train_forward_sess.run( 
+      [dkm_forward_model.iterator.source, 
+       dkm_forward_model.iterator.source_sequence_length, 
        dkm_forward_model.model.km_encoder_outputs, 
-       dkm_forward_model.model.km_encoder_state])    
+       dkm_forward_model.model.km_encoder_state]) 
   
   #indices = raw_ids_data[1]
   g = tf.Graph()
@@ -510,15 +512,28 @@ def train_deepkmeans(hparams, scope=None, target_session=""):
   temp_sess = tf.Session(config=config_proto, graph=g)
   with g.as_default():
     res_val = temp_sess.run(res)
-
-  import ipdb; ipdb.set_trace()    
-
-  from kmtools import Kmeans
-  KM = Kmeans(50)
-  assignment, loss = KM.cluster(res_val)
-  print('loss: ' + str(loss)) 
-  print(assignment)
   
+  import ipdb; ipdb.set_trace()    
+  
+  ## use Kmeans from kmtools (FAISS) 
+  from kmtools import Kmeans
+  KM = Kmeans(hparams.km_num_centroids) ## todo: define this hparams 
+  data_assignment, km_centroids, km_loss = KM.cluster(res_val)
+  print('k-means loss: ' + str(loss)) 
+  print('k-means assignment: ')
+  print(assignment)
+  print('k-means centroids: ')
+  print(centroids) 
+  
+  ## next use data_sequences, data_assignment to make new [dataset, iterator] then 
+  ## revise the graph 
+  
+  #tf.Dataset.zip(data_sequences, data_assignment) 
+  data_assignment = tf.reshape(data_assignment, [hparams.dkm_dataset_size, 1]) 
+  ft_dataset = tf.Dataset.from_tensor_slices((data_sequences, data_assignment)) 
+  
+
+  ft_iterator = iterator_utils.get_dkm_finetune_iterator(ft_dataset, hparams) 
   import ipdb; ipdb.set_trace()  
   
   """  
