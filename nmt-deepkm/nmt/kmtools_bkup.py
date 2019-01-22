@@ -10,10 +10,7 @@ import numpy as np
 ## next steps: test the assignment function
 ## next next steps: integrate with NMT code
 
-max_num_iters = 200 
-default_pca_dim = 100 
-
-def preprocess_features(npdata, pca=default_pca_dim):
+def preprocess_features(npdata, pca=100):
     """Preprocess an array of features.
     Args:
         npdata (np.array N * ndim): features to preprocess
@@ -47,7 +44,7 @@ def preprocess_features(npdata, pca=default_pca_dim):
     row_sums = np.linalg.norm(pw_npdata, axis=1) 
     pw_npdata = pw_npdata / row_sums[:, np.newaxis] 
     
-    return pw_npdata, pcawhiten_mat 
+    return pw_npdata 
 
 
 """
@@ -104,7 +101,7 @@ def run_kmeans(x, nmb_clusters, verbose=False):
     
     # faiss implementation of k-means
     clus = faiss.Clustering(d, nmb_clusters)
-    clus.niter = max_num_iters
+    clus.niter = 20
     clus.max_points_per_centroid = 10000000
     res = faiss.StandardGpuResources()
     flat_config = faiss.GpuIndexFlatConfig()
@@ -116,11 +113,10 @@ def run_kmeans(x, nmb_clusters, verbose=False):
     clus.train(x, index)
     _, I = index.search(x, 1)
     losses = faiss.vector_to_array(clus.obj)
-    centroids = faiss.vector_to_array(clus.centroids)
     if verbose:
         print('k-means loss evolution: {0}'.format(losses))
 
-    return [int(n[0]) for n in I], centroids, losses[-1]
+    return [int(n[0]) for n in I], losses[-1]
 
 
 class Kmeans:
@@ -135,10 +131,10 @@ class Kmeans:
         end = time.time()
 
         # PCA-reducing, whitening and L2-normalization
-        xb, pcawhiten_mat = preprocess_features(data)
+        xb = preprocess_features(data)
 
         # cluster the data
-        I, centroids, loss = run_kmeans(xb, self.k, verbose)
+        I, loss = run_kmeans(xb, self.k, verbose)
         self.images_lists = [[] for i in range(self.k)]
         for i in range(len(data)):
             self.images_lists[I[i]].append(i)
@@ -146,4 +142,4 @@ class Kmeans:
         if verbose:
             print('k-means time: {0:.0f} s'.format(time.time() - end))
 
-        return I, centroids, loss, pcawhiten_mat
+        return I, loss

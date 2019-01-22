@@ -64,7 +64,7 @@ Align the vocabulary, with imdb, we may have to use the vocabulary offered by to
 
 ## 2. k-means clustering with no carry-forward initialization [ implemented ] 
 
-## 3. fine-tune the encoder with NCA objective using cluster [ 2 - 3 hours ] 
+## 3. fine-tune the encoder with NCA objective using cluster [ 2 - 3 hours ] implementing 
 
 ## 4. iterate to 1. [ combine, test, and iterate on the algorithm, 2 hours ] 
 

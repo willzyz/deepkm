@@ -50,6 +50,7 @@ def add_arguments(parser):
   parser.add_argument("--dkm_vocab_file", type=str, default="", help="Vocabulary for imdb-topic-rnn.")   
   parser.add_argument("--dkm_dataset_size", type=int, default=961617, help="Number of data points in Deep Kmeans Training Dataset.")
   parser.add_argument("--dkm_vocab_size", type=int, default=5003, help="Size of train data vocabulary.") 
+  parser.add_argument("--dkm_num_centroids", type=int, default=50, help="Number of centroids for k-means.") 
   
   # network
   parser.add_argument("--num_units", type=int, default=32, help="Network size.")
@@ -316,18 +317,18 @@ def add_arguments(parser):
   parser.add_argument("--num_intra_threads", type=int, default=0,
                       help="number of intra_op_parallelism_threads")
 
-
 def create_hparams(flags): 
   """Create training hparams.""" 
   return tf.contrib.training.HParams( 
       # DKM 
       dkm_train_data_file = flags.dkm_train_data_file, 
       dkm_dataset_size = flags.dkm_dataset_size, 
-      dkm_vocab_file = flags.dkm_vocab_file,
-      num_workers = flags.num_workers,
-      src_vocab_size = flags.dkm_vocab_size,
-      tgt_vocab_size = flags.dkm_vocab_size,
-      dkm_vocab_size = flags.dkm_vocab_size,
+      dkm_vocab_file = flags.dkm_vocab_file, 
+      num_workers = flags.num_workers, 
+      src_vocab_size = flags.dkm_vocab_size, 
+      tgt_vocab_size = flags.dkm_vocab_size, 
+      dkm_vocab_size = flags.dkm_vocab_size, 
+      dkm_num_centroids = flags.dkm_num_centroids,
       
       # Data 
       src=flags.src, 

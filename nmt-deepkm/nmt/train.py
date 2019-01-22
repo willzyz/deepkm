@@ -19,6 +19,7 @@ import math
 import os
 import random
 import time
+import collections
 
 import tensorflow as tf
 
@@ -40,6 +41,10 @@ __all__ = [
     "add_info_summaries", "get_best_results"
 ]
 
+class KMData(
+    collections.namedtuple("KMData",
+                           ("centroids", "pcawhiten_mat"))):
+  pass
 
 def run_sample_decode(infer_model, infer_sess, model_dir, hparams,
                       summary_writer, src_data, tgt_data):
@@ -472,10 +477,13 @@ def train_deepkmeans(hparams, scope=None, target_session=""):
   
   ## for loop step: iteratively train the model using session.run(model-finetune-update) 
   ## } 
+  graph = tf.Graph()
+
+  with graph.as_default():
+    DataAllSequences = tf.data.TextLineDataset(tf.gfile.Glob(hparams.dkm_train_data_file))
+    model_creator = get_model_creator(hparams)
   
-  model_creator = get_model_creator(hparams)
-  
-  dkm_forward_model = model_helper.create_deepkm_train_model(model_creator, hparams, scope=scope) 
+  dkm_forward_model = model_helper.create_deepkm_train_model(graph, DataAllSequences, 'forward', None, model_creator, hparams, scope=scope) 
   
   # TensorFlow model
   config_proto = utils.get_config_proto(
@@ -486,60 +494,81 @@ def train_deepkmeans(hparams, scope=None, target_session=""):
   train_forward_sess = tf.Session(
       target=target_session, config=config_proto, graph=dkm_forward_model.graph)
   
-  ## later: create a batching algorithm to forward propagate the data
-  
+  ## later: create a batching algorithm to forward propagate the data 
   with dkm_forward_model.graph.as_default(): 
-    train_forward_sess.run(tf.global_variables_initializer())
-    train_forward_sess.run(tf.tables_initializer())
+    train_forward_sess.run(tf.global_variables_initializer()) 
+    train_forward_sess.run(tf.tables_initializer()) 
     train_forward_sess.run(dkm_forward_model.iterator.initializer)
+
+  with dkm_forward_model.graph.as_default(): 
     data_sequences, data_seq_lens, result_outputs, result_state = train_forward_sess.run( 
       [dkm_forward_model.iterator.source, 
        dkm_forward_model.iterator.source_sequence_length, 
        dkm_forward_model.model.km_encoder_outputs, 
        dkm_forward_model.model.km_encoder_state]) 
   
-  #indices = raw_ids_data[1]
-  g = tf.Graph()
+  #indices = raw_ids_data[1] 
+  g = tf.Graph() 
   with g.as_default(): 
-    num_samples = hparams.dkm_dataset_size
-    index_0 = tf.reshape(data_seq_lens, [1, 50000, 1])
-    index_0 = tf.add(index_0, -1)
-    index_1 = tf.reshape(tf.range(num_samples), [1, num_samples, 1])
-    index = tf.squeeze(tf.stack([index_0, index_1], axis=2), [3])
-    res = tf.gather_nd(result_outputs, index)
-    res = tf.squeeze(res)
+    num_samples = hparams.dkm_dataset_size 
+    index_0 = tf.reshape(data_seq_lens, [1, num_samples, 1]) 
+    index_0 = tf.add(index_0, -1) 
+    index_1 = tf.reshape(tf.range(num_samples), [1, num_samples, 1]) 
+    index = tf.squeeze(tf.stack([index_0, index_1], axis=2), [3]) 
+    res = tf.gather_nd(result_outputs, index) 
+    res = tf.squeeze(res) 
   
-  temp_sess = tf.Session(config=config_proto, graph=g)
-  with g.as_default():
-    res_val = temp_sess.run(res)
-  
-  import ipdb; ipdb.set_trace()    
+  temp_sess = tf.Session(config=config_proto, graph=g) 
+  with g.as_default(): 
+    res_val = temp_sess.run(res) 
   
   ## use Kmeans from kmtools (FAISS) 
   from kmtools import Kmeans
-  KM = Kmeans(hparams.km_num_centroids) ## todo: define this hparams 
-  data_assignment, km_centroids, km_loss = KM.cluster(res_val)
-  print('k-means loss: ' + str(loss)) 
+  KM = Kmeans(hparams.dkm_num_centroids) ## todo: define this hparams 
+  data_assignment, km_centroids, km_loss, pcawhiten_mat = KM.cluster(res_val)
+  print('k-means loss: ' + str(km_loss)) 
   print('k-means assignment: ')
-  print(assignment)
+  print(data_assignment)
   print('k-means centroids: ')
-  print(centroids) 
+  print(km_centroids)
+  print(km_centroids.shape)
+  
+  import numpy as np
+  km_centroids = np.reshape(km_centroids, [50, 100])
   
   ## next use data_sequences, data_assignment to make new [dataset, iterator] then 
   ## revise the graph 
   
   #tf.Dataset.zip(data_sequences, data_assignment) 
-  data_assignment = tf.reshape(data_assignment, [hparams.dkm_dataset_size, 1]) 
-  ft_dataset = tf.Dataset.from_tensor_slices((data_sequences, data_assignment)) 
-  
+  with dkm_forward_model.graph.as_default():    
+    data_assignment = tf.reshape(data_assignment, [hparams.dkm_dataset_size, 1]) 
+    ft_dataset = tf.data.Dataset.from_tensor_slices((data_sequences, data_seq_lens, data_assignment)) 
+    km_data = KMData(centroids=km_centroids, pcawhiten_mat=pcawhiten_mat)
+    
+    dkm_forward_model = model_helper.create_deepkm_train_model(graph, ft_dataset, 'fine-tune', km_data, model_creator, hparams, scope=scope)
 
-  ft_iterator = iterator_utils.get_dkm_finetune_iterator(ft_dataset, hparams) 
-  import ipdb; ipdb.set_trace()  
+    train_forward_sess.run(dkm_forward_model.model.global_step.initializer)     
+    train_forward_sess.run(dkm_forward_model.model.iterator.initializer)
+    
+    for i in range(data_sequences.shape[0] / hparams.batch_size): 
+      train_forward_sess.run(dkm_forward_model.model.update)
+    
+    """
+    data_sequences, data_seq_lens, result_outputs, result_state, ft_loss, ft_update = train_forward_sess.run( 
+      [dkm_forward_model.model.iterator.source, 
+       dkm_forward_model.model.iterator.source_sequence_length, 
+       dkm_forward_model.model.km_encoder_outputs, 
+       dkm_forward_model.model.km_encoder_state,
+       dkm_forward_model.model.train_loss,
+       dkm_forward_model.model.update,
+      ]) 
+    """
+    
+  import ipdb; ipdb.set_trace() 
   
-  """  
-  
+  """ 
   dkm_model.reset_iterator(dkm_batch_iterator) 
-
+  
   global_steps = 0
   for epoch in range(hparams.dkm_max_epochs):
     ##---- for epoch loop ---- 

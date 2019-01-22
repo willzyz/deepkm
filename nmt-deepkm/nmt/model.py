@@ -67,9 +67,12 @@ class BaseModel(object):
                target_vocab_table,
                reverse_target_vocab_table=None,
                scope=None,
+               dkm_mode='forward',
+               km_data=None,
                extra_args=None):
+    
     """Create the model.
-
+    
     Args:
       hparams: Hyperparameter configurations.
       mode: TRAIN | EVAL | INFER
@@ -80,22 +83,29 @@ class BaseModel(object):
         required in INFER mode. Defaults to None.
       scope: scope of the model.
       extra_args: model_helper.ExtraArgs, for passing customizable functions.
-
+    
     """
+    
     # Set params
     self._set_params_initializer(hparams, mode, iterator,
                                  source_vocab_table, target_vocab_table,
                                  scope, extra_args)
-
+    
     # Not used in general seq2seq models; when True, ignore decoder & training
     self.extract_encoder_layers = (hasattr(hparams, "extract_encoder_layers")
                                    and hparams.extract_encoder_layers)
     
+    # Set mode for deep Kmeans, default: forward
+    self.dkm_mode = dkm_mode
+    if km_data:
+      self.centroids = km_data.centroids
+      self.pcawhiten_mat = km_data.pcawhiten_mat
+    
     # Train graph 
     self.km_encoder_outputs, self.km_encoder_state = self.build_km_encoder_graph(hparams, scope=scope)
-    #if not self.extract_encoder_layers:
-    #  self._set_train_or_infer(res, reverse_target_vocab_table, hparams)
-
+    if not self.extract_encoder_layers:
+      self._set_train_or_infer_km(hparams)
+    
     # Saver
     #self.saver = tf.train.Saver(
     #    tf.global_variables(), max_to_keep=hparams.num_keep_ckpts)
@@ -108,8 +118,10 @@ class BaseModel(object):
                               target_vocab_table,
                               scope,
                               extra_args=None):
+    
     """Set various params for self and initialize."""
-    assert isinstance(iterator, iterator_utils.BatchedInput) or isinstance(iterator, iterator_utils.KMBatchedFullInput)
+    assert isinstance(iterator, iterator_utils.BatchedInput) or isinstance(iterator, iterator_utils.KMBatchedFullInput) or isinstance(iterator, iterator_utils.KMFineTuneInput)     
+    
     self.iterator = iterator
     self.mode = mode
     self.src_vocab_table = source_vocab_table
@@ -167,7 +179,7 @@ class BaseModel(object):
     else:
       self.encoder_emb_lookup_fn = tf.nn.embedding_lookup
     self.init_embeddings(hparams, scope)
-
+  
   def _set_train_or_infer(self, res, reverse_target_vocab_table, hparams):
     """Set up training and inference."""
     if self.mode == tf.contrib.learn.ModeKeys.TRAIN:
@@ -221,7 +233,7 @@ class BaseModel(object):
           gradients, max_gradient_norm=hparams.max_gradient_norm)
       self.grad_norm_summary = grad_norm_summary
       self.grad_norm = grad_norm
-
+      
       self.update = opt.apply_gradients(
           zip(clipped_grads, params), global_step=self.global_step)
 
@@ -236,7 +248,47 @@ class BaseModel(object):
     for param in params:
       utils.print_out("  %s, %s, %s" % (param.name, str(param.get_shape()),
                                         param.op.device))
+  
+  def _set_train_or_infer_km(self, hparams): 
+    """Set up training and inference.""" 
+    params = tf.trainable_variables() 
+    
+    # Gradients and SGD update operation for training the model. 
+    # Arrange for the embedding vars to appear at the beginning. 
+    
+    self.learning_rate = tf.constant(hparams.learning_rate)
+    # warm-up
+    self.learning_rate = self._get_learning_rate_warmup(hparams)
+    # decay
+    self.learning_rate = self._get_learning_rate_decay(hparams)
+    
+    # Optimizer
+    if hparams.optimizer == "sgd":
+      opt = tf.train.GradientDescentOptimizer(self.learning_rate)
+    elif hparams.optimizer == "adam":
+      opt = tf.train.AdamOptimizer(self.learning_rate)
+    else:
+      raise ValueError("Unknown optimizer type %s" % hparams.optimizer)
+    
+    # Gradients
+    gradients = tf.gradients(
+      self.train_loss,
+      params,
+      colocate_gradients_with_ops=hparams.colocate_gradients_with_ops)
 
+    clipped_grads, grad_norm_summary, grad_norm = model_helper.gradient_clip(
+      gradients, max_gradient_norm=hparams.max_gradient_norm)
+    self.grad_norm_summary = grad_norm_summary
+    self.grad_norm = grad_norm
+    
+    if self.dkm_mode == 'fine-tune': 
+      self.update = opt.apply_gradients( 
+        zip(clipped_grads, params), global_step=self.global_step) 
+    
+    # Summary
+    self.train_summary = self._get_train_summary()
+
+  
   def _get_learning_rate_warmup(self, hparams):
     """Get learning rate warmup."""
     warmup_steps = hparams.warmup_steps
@@ -349,22 +401,83 @@ class BaseModel(object):
                                    predict_count=self.predict_count,
                                    batch_size=self.batch_size)
     return sess.run(output_tuple)
-
-  """
-  def _compute_nca_loss(encoder_state, centroids, assignments):
-    
+  
+  def select_final_sequence_output(self, encoder_outputs, data_seq_lens, hparams): 
+    num_samples = hparams.batch_size 
+    index_0 = tf.reshape(data_seq_lens, [1, num_samples, 1])
+    index_0 = tf.add(index_0, -1) 
+    index_1 = tf.reshape(tf.range(num_samples), [1, num_samples, 1])
+    index = tf.squeeze(tf.stack([index_0, index_1], axis=2), [3])
+    res = tf.gather_nd(encoder_outputs, index)
+    res = tf.squeeze(res)
+    return res
+  
+  def set_mode_kmdata(self, mode, cens, pcawhiten_mat): 
+    self.dkm_mode = mode 
+    self.centroids = cens 
+    self.pcawhiten_mat = pcawhiten_mat 
+  
+  def _compute_nca_loss(self, hparams):
     ## defines the NCA objective for euclidean distance
     ## weighted softmax winner-take all normalization
     ## then compute the cross-entropy loss with assignments as labels
     
-    final_cell_state = encoder_state[self.num_layers]    
-    h = final_cell_state['h'] 
+    # backup logic for using final state 
+    #final_cell_state = encoder_state[self.num_layers]    
+    #h = final_cell_state['h'] 
+    h = self.select_final_sequence_output(
+                self.encoder_outputs, 
+                self.iterator.source_sequence_length, 
+                hparams)
+    #h shape: N x hidden_dim
+    print('printing shapes')
+    print(h.shape)
+    print(self.pcawhiten_mat.shape)
+    
+    h = tf.matmul(h, self.pcawhiten_mat)
+    #h shape: N x pca_dim 
+    
+    h = tf.reshape(h, [h.shape[0], h.shape[1], 1]) 
+    #h shape: N x pca_dim x 1 
+    
+    #c shape: nC x pca_dim 
+    centroids = tf.transpose(self.centroids, perm=[1, 0]) 
+    #c shape: pca_dim x nC 
+    centroids = tf.reshape(centroids, [1, centroids.shape[0], centroids.shape[1]])
+    #c shape: 1 x pca_dim x nC 
+    
+    ## compute distance using euclidean dist squared 
+    diff = tf.add( centroids, tf.negative(h) ) 
+    diff = tf.square(diff)
+    
+    #diff shape: N x pca_dim x nC 
+    
+    sq_sum = tf.reduce_sum(diff, axis=1)
+    #sq_sum shape: N x 1 x nC
+    sq_sum = tf.squeeze(sq_sum)
+    #sq_sum shape: N x nC
+    
+    logit = tf.negative(sq_sum)
+    
+    label = tf.one_hot(self.iterator.centroid_label, centroids.shape[-1], dtype=tf.int32)
+    label = tf.squeeze(label) 
+    
+    crossent = tf.nn.softmax_cross_entropy_with_logits_v2(
+          labels=label, logits=logit)
+    
+    loss = tf.reduce_sum(
+        crossent ) / tf.to_float(self.batch_size)
+    
+    return loss 
+  
+  """    
+    
     
     ## this should be of size [batch_size, hidden_dim]    
-    h = tf.reshape(h, [h.shape[0], h.shape[1], 1]) 
-
-    ## compute distance using euclidean dist squared 
-    dist_sq = tf.reduce_sum(tf.square(tf.add( centroids, tf.negative(h) )), axis = 0)
+  
+    centroids 
+    
+    dist_sq = tf.reduce_sum(tf.square( )), axis = 0)
 
     ## loss using tf softmax with cross entropy 
     loss = tf.softmax_with_cross_entropy_loss(dist_sq, .., assignments) 
@@ -374,13 +487,17 @@ class BaseModel(object):
   
   def build_km_encoder_graph(self, hparams, scope=None):  
     print('building kmeans encoder graph') 
-    
+    print('dkm_mode == ' + self.dkm_mode)
     #with tf.variable_scope(scope or "kmeans_lstm", dtype=self.dtype):
-
-    with tf.variable_scope(scope or "dynamic_seq2seq", dtype=self.dtype):      
+    
+    with tf.variable_scope(scope or "dynamic_seq2seq", dtype=self.dtype, reuse=tf.AUTO_REUSE): 
       self.encoder_outputs, encoder_state = self._build_encoder(hparams)
     
-    #self.train_loss = _compute_nca_loss()
+    if self.dkm_mode == 'fine-tune': 
+      self.train_loss = self._compute_nca_loss(hparams) 
+    else:
+      self.train_loss = 0.0 
+    
     return self.encoder_outputs, encoder_state 
   
   def build_graph(self, hparams, scope=None):

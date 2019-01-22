@@ -22,7 +22,7 @@ import tensorflow as tf
 from ..utils import vocab_utils
 
 
-__all__ = ["BatchedInput", "KMBatchedFullInput", "KMFineTuneInput", "get_iterator", "get_infer_iterator"]
+__all__ = ["BatchedInput", "KMBatchedFullInput", "KMFineTuneInput", "get_iterator", "get_infer_iterator", "get_dkm_finetune_iterator"]
 
 
 # NOTE(ebrevdo): When we subclass this, instances' __dict__ becomes empty.
@@ -337,6 +337,16 @@ def get_dkm_batch_iterator(
     initializer=batched_iter.initializer,
       source=src_ids,
       source_sequence_length=src_seq_len)
-
-  def get_dkm_finetune_iterator(ft_dataset, hparams): 
+  
+def get_dkm_finetune_iterator(ft_dataset, hparams): 
+      
+  batched_ft_dataset = ft_dataset.batch(hparams.batch_size) 
+  batched_iter = batched_ft_dataset.make_initializable_iterator() 
     
+  (src_ids, src_seq_len, c_label) = (batched_iter.get_next()) 
+    
+  return KMFineTuneInput( 
+    initializer=batched_iter.initializer, 
+    source=src_ids, 
+    source_sequence_length=src_seq_len, 
+    centroid_label=c_label) 

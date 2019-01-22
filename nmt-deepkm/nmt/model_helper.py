@@ -150,42 +150,49 @@ def get_dkm_batch_iterator(train_dataset, hparams, jobid=0):
   return iterator 
 
 def create_deepkm_train_model(
+    graph,
+    dataset,
+    mode,
+    km_data,
     model_creator,
     hparams, scope=None, num_workers=1, jobid=0,
     extra_args=None):
-  ## use a temporary text file to store the centroids
-  ## thus create a matching iterator for
   
-  """Create train graph, model, and iterator."""
+  ## use a temporary text file to store the centroids 
+  ## thus create a matching iterator for 
   
-  graph = tf.Graph()
-  #skip_count_placeholder = tf.placeholder(shape=(), dtype=tf.int64)  
+  """Create train graph, model, and iterator.""" 
   
-  with graph.as_default(), tf.container(scope or "train"):
-
-    DataAllSequences = tf.data.TextLineDataset(tf.gfile.Glob(hparams.dkm_train_data_file))
+  #skip_count_placeholder = tf.placeholder(shape=(), dtype=tf.int64) 
+  
+  with graph.as_default(), tf.container(scope or "train"): 
     
-    dkm_batch_iterator = get_dkm_batch_iterator(DataAllSequences, hparams)
+    if mode == 'forward': 
+      dkm_iterator = get_dkm_batch_iterator(dataset, hparams)
+    elif mode == 'fine-tune': 
+      dkm_iterator = iterator_utils.get_dkm_finetune_iterator(dataset, hparams) 
     
     # Note: One can set model_device_fn to 
     # `tf.train.replica_device_setter(ps_tasks)` for distributed training.
-    model_device_fn = None
-    if extra_args: model_device_fn = extra_args.model_device_fn
-    with tf.device(model_device_fn):
-      model = model_creator( #customize this 
-          hparams,
-          iterator=dkm_batch_iterator,
-          mode=tf.contrib.learn.ModeKeys.TRAIN,
+    model_device_fn = None 
+    if extra_args: model_device_fn = extra_args.model_device_fn 
+    with tf.device(model_device_fn): 
+      model = model_creator( 
+          hparams, 
+          iterator=dkm_iterator, 
+          mode=tf.contrib.learn.ModeKeys.TRAIN, 
           source_vocab_table=None, 
           target_vocab_table=None, 
           scope=scope,
-          extra_args=extra_args)
+          dkm_mode=mode,
+          km_data=km_data, 
+          extra_args=extra_args) 
   
   return TrainModel(
       graph=graph,
       model=model,
-      iterator=dkm_batch_iterator,
-      skip_count_placeholder=None), KM
+      iterator=dkm_iterator,
+      skip_count_placeholder=None)
 
 
 class EvalModel(
@@ -318,7 +325,7 @@ def _create_pretrained_emb_from_txt(
     utils.print_out("    %s" % token)
     if token not in emb_dict:
       emb_dict[token] = [0.0] * emb_size
-
+  
   emb_mat = np.array(
       [emb_dict[token] for token in vocab], dtype=dtype.as_numpy_dtype())
   emb_mat = tf.constant(emb_mat)
@@ -329,17 +336,16 @@ def _create_pretrained_emb_from_txt(
           "emb_mat_var", [num_trainable_tokens, emb_size])
   return tf.concat([emb_mat_var, emb_mat_const], 0)
 
-
-def _create_or_load_embed(embed_name, vocab_file, embed_file,
-                          vocab_size, embed_size, dtype):
-  """Create a new or load an existing embedding matrix."""
-  if vocab_file and embed_file:
-    embedding = _create_pretrained_emb_from_txt(vocab_file, embed_file)
-  else:
-    with tf.device(_get_embed_device(vocab_size)):
-      embedding = tf.get_variable(
-          embed_name, [vocab_size, embed_size], dtype)
-  return embedding
+def _create_or_load_embed(embed_name, vocab_file, embed_file, 
+                          vocab_size, embed_size, dtype): 
+  """Create a new or load an existing embedding matrix.""" 
+  if vocab_file and embed_file: 
+    embedding = _create_pretrained_emb_from_txt(vocab_file, embed_file) 
+  else: 
+    with tf.device(_get_embed_device(vocab_size)): 
+      embedding = tf.get_variable( 
+          embed_name, [vocab_size, embed_size], dtype) 
+  return embedding 
 
 
 def create_emb_for_encoder_and_decoder(share_vocab,
@@ -409,9 +415,9 @@ def create_emb_for_encoder_and_decoder(share_vocab,
     raise ValueError(
         "Can't set num_dec_partitions > 1 when using pretrained decdoer "
         "embedding")
-
+  
   with tf.variable_scope(
-      scope or "embeddings", dtype=dtype, partitioner=enc_partitioner) as scope:
+      scope or "embeddings", dtype=dtype, partitioner=enc_partitioner, reuse=tf.AUTO_REUSE) as scope:
     # Share embedding
     if share_vocab:
       if src_vocab_size != tgt_vocab_size:
@@ -428,14 +434,14 @@ def create_emb_for_encoder_and_decoder(share_vocab,
       embedding_decoder = embedding_encoder
     else:
       if not use_char_encode:
-        with tf.variable_scope("encoder", partitioner=enc_partitioner):
+        with tf.variable_scope("encoder", partitioner=enc_partitioner, reuse=tf.AUTO_REUSE):
           embedding_encoder = _create_or_load_embed(
               "embedding_encoder", src_vocab_file, src_embed_file,
               src_vocab_size, src_embed_size, dtype)
       else:
         embedding_encoder = None
 
-      with tf.variable_scope("decoder", partitioner=dec_partitioner):
+      with tf.variable_scope("decoder", partitioner=dec_partitioner, reuse=tf.AUTO_REUSE):
         embedding_decoder = _create_or_load_embed(
             "embedding_decoder", tgt_vocab_file, tgt_embed_file,
             tgt_vocab_size, tgt_embed_size, dtype)
@@ -671,7 +677,6 @@ def avg_checkpoints(model_dir, num_last_checkpoints, global_step,
           os.path.join(avg_model_dir, "translate.ckpt"))
 
   return avg_model_dir
-
 
 def create_or_load_model(model, model_dir, session, name):
   """Create translation model and initialize or load parameters in session."""
