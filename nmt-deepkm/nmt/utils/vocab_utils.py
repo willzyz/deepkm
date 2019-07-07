@@ -142,6 +142,7 @@ def check_vocab(vocab_file, out_dir, check_special_token=True, sos=None,
 
 def create_vocab_tables(src_vocab_file, tgt_vocab_file, share_vocab):
   """Creates vocab tables for src_vocab_file and tgt_vocab_file."""
+
   src_vocab_table = lookup_ops.index_table_from_file(
       src_vocab_file, default_value=UNK_ID)
   if share_vocab:

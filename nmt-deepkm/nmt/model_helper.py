@@ -84,7 +84,7 @@ def create_train_model(
   tgt_file = "%s.%s" % (hparams.train_prefix, hparams.tgt)
   src_vocab_file = hparams.src_vocab_file
   tgt_vocab_file = hparams.tgt_vocab_file
-  
+  import ipdb; ipdb.set_trace()
   graph = tf.Graph()
   
   with graph.as_default(), tf.container(scope or "train"):
@@ -134,7 +134,7 @@ def create_train_model(
 
 def get_dkm_batch_iterator(train_dataset, hparams, jobid=0):
   vocab_file = hparams.dkm_vocab_file
-  
+  import ipdb; ipdb.set_trace() 
   vocab_table, _ = vocab_utils.create_vocab_tables(
     vocab_file, vocab_file, True)  
   

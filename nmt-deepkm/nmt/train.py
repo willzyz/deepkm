@@ -443,10 +443,10 @@ def get_model_creator(hparams):
   if (hparams.encoder_type == "gnmt" or
       hparams.attention_architecture in ["gnmt", "gnmt_v2"]):
     model_creator = gnmt_model.GNMTModel
+  elif not hparams.attention:
+    model_creator = nmt_model.Model    
   elif hparams.attention_architecture == "standard":
     model_creator = attention_model.AttentionModel
-  elif not hparams.attention:
-    model_creator = nmt_model.Model
   else:
     raise ValueError("Unknown attention architecture %s" %
                      hparams.attention_architecture)
@@ -483,8 +483,6 @@ def train_deepkmeans(hparams, scope=None, target_session=""):
     DataAllSequences = tf.data.TextLineDataset(tf.gfile.Glob(hparams.dkm_train_data_file))
     model_creator = get_model_creator(hparams)
   
-  dkm_forward_model = model_helper.create_deepkm_train_model(graph, DataAllSequences, 'forward', None, model_creator, hparams, scope=scope) 
-  
   # TensorFlow model
   config_proto = utils.get_config_proto(
       log_device_placement=hparams.log_device_placement,
@@ -492,66 +490,91 @@ def train_deepkmeans(hparams, scope=None, target_session=""):
       num_inter_threads=hparams.num_inter_threads)
   
   train_forward_sess = tf.Session(
-      target=target_session, config=config_proto, graph=dkm_forward_model.graph)
+      target=target_session, config=config_proto, graph=graph)
   
   ## later: create a batching algorithm to forward propagate the data 
-  with dkm_forward_model.graph.as_default(): 
-    train_forward_sess.run(tf.global_variables_initializer()) 
-    train_forward_sess.run(tf.tables_initializer()) 
-    train_forward_sess.run(dkm_forward_model.iterator.initializer)
-
-  with dkm_forward_model.graph.as_default(): 
-    data_sequences, data_seq_lens, result_outputs, result_state = train_forward_sess.run( 
-      [dkm_forward_model.iterator.source, 
-       dkm_forward_model.iterator.source_sequence_length, 
-       dkm_forward_model.model.km_encoder_outputs, 
-       dkm_forward_model.model.km_encoder_state]) 
+  with graph.as_default():
+    #dkm_forward_model = model_helper.create_deepkm_train_model(graph, DataAllSequences, 'forward', None, model_creator, hparams, scope=scope) 
+    dkm_forward_model = model_helper.create_deepkm_train_model(graph, DataAllSequences, 'forward', None, model_creator, hparams, scope=scope)
+    train_forward_sess.run(tf.global_variables_initializer())
+    train_forward_sess.run(tf.tables_initializer())
   
-  #indices = raw_ids_data[1] 
-  g = tf.Graph() 
-  with g.as_default(): 
-    num_samples = hparams.dkm_dataset_size 
-    index_0 = tf.reshape(data_seq_lens, [1, num_samples, 1]) 
-    index_0 = tf.add(index_0, -1) 
-    index_1 = tf.reshape(tf.range(num_samples), [1, num_samples, 1]) 
-    index = tf.squeeze(tf.stack([index_0, index_1], axis=2), [3]) 
-    res = tf.gather_nd(result_outputs, index) 
-    res = tf.squeeze(res) 
+  global_step = 0 
+  for epoch in range(200):
+    print('------------ starting epoch: ' + str(epoch) + '-------------------------')  
+    with graph.as_default():
+      dkm_forward_model = model_helper.create_deepkm_train_model(graph, DataAllSequences, 'forward', None, model_creator, hparams, scope=scope)
+      train_forward_sess.run(dkm_forward_model.iterator.initializer)
+      
+      data_sequences, data_seq_lens, result_outputs, result_state = train_forward_sess.run( 
+        [dkm_forward_model.iterator.source, 
+         dkm_forward_model.iterator.source_sequence_length, 
+         dkm_forward_model.model.km_encoder_outputs, 
+         dkm_forward_model.model.km_encoder_state]) 
+    print('Sanity check - printing out first 5 elements of data_seq_lens:') 
+    print(data_seq_lens[0:5]) 
+    g = tf.Graph() 
+    with g.as_default(): 
+      num_samples = hparams.dkm_dataset_size 
+      index_0 = tf.reshape(data_seq_lens, [1, num_samples, 1]) 
+      index_0 = tf.add(index_0, -1) 
+      index_1 = tf.reshape(tf.range(num_samples), [1, num_samples, 1]) 
+      index = tf.squeeze(tf.stack([index_0, index_1], axis=2), [3]) 
+      res = tf.gather_nd(result_outputs, index) 
+      res = tf.squeeze(res) 
   
-  temp_sess = tf.Session(config=config_proto, graph=g) 
-  with g.as_default(): 
-    res_val = temp_sess.run(res) 
+    temp_sess = tf.Session(config=config_proto, graph=g) 
+    with g.as_default(): 
+      res_val = temp_sess.run(res) 
   
-  ## use Kmeans from kmtools (FAISS) 
-  from kmtools import Kmeans
-  KM = Kmeans(hparams.dkm_num_centroids) ## todo: define this hparams 
-  data_assignment, km_centroids, km_loss, pcawhiten_mat = KM.cluster(res_val)
-  print('k-means loss: ' + str(km_loss)) 
-  print('k-means assignment: ')
-  print(data_assignment)
-  print('k-means centroids: ')
-  print(km_centroids)
-  print(km_centroids.shape)
-  
-  import numpy as np
-  km_centroids = np.reshape(km_centroids, [50, 100])
-  
-  ## next use data_sequences, data_assignment to make new [dataset, iterator] then 
-  ## revise the graph 
-  
-  #tf.Dataset.zip(data_sequences, data_assignment) 
-  with dkm_forward_model.graph.as_default():    
-    data_assignment = tf.reshape(data_assignment, [hparams.dkm_dataset_size, 1]) 
-    ft_dataset = tf.data.Dataset.from_tensor_slices((data_sequences, data_seq_lens, data_assignment)) 
-    km_data = KMData(centroids=km_centroids, pcawhiten_mat=pcawhiten_mat)
+    ## use Kmeans from kmtools (FAISS) 
+    from kmtools import Kmeans
+    KM = Kmeans(hparams.dkm_num_centroids) ## todo: define this hparams 
+    data_assignment, km_centroids, km_loss, pcawhiten_mat = KM.cluster(res_val)
+    print('k-means loss: ' + str(km_loss)) 
+    #print('k-means assignment: ')
+    #print(data_assignment)
+    #print('k-means centroids: ')
+    #print(km_centroids)
+    #print(km_centroids.shape)
     
-    dkm_forward_model = model_helper.create_deepkm_train_model(graph, ft_dataset, 'fine-tune', km_data, model_creator, hparams, scope=scope)
-
-    train_forward_sess.run(dkm_forward_model.model.global_step.initializer)     
-    train_forward_sess.run(dkm_forward_model.model.iterator.initializer)
+    import numpy as np
+    km_centroids = np.reshape(km_centroids, [50, 100])
     
-    for i in range(data_sequences.shape[0] / hparams.batch_size): 
-      train_forward_sess.run(dkm_forward_model.model.update)
+    ## next use data_sequences, data_assignment to make new [dataset, iterator] then 
+    ## revise the graph 
+    
+    #tf.Dataset.zip(data_sequences, data_assignment)
+    
+    with dkm_forward_model.graph.as_default():
+      train_forward_sess.run(dkm_forward_model.model.global_step.initializer)
+      dkm_forward_model.model.saver.save( 
+        train_forward_sess, 
+        os.path.join(hparams.out_dir, "deepkmeans.ckpt" + ".epoch_" + str(epoch) + ".step_0"), 
+        global_step=global_step)
+      
+      data_assignment = tf.reshape(data_assignment, [hparams.dkm_dataset_size, 1]) 
+      ft_dataset = tf.data.Dataset.from_tensor_slices((data_sequences, data_seq_lens, data_assignment)) 
+      km_data = KMData(centroids=km_centroids, pcawhiten_mat=pcawhiten_mat)
+      
+      dkm_forward_model = model_helper.create_deepkm_train_model(graph, ft_dataset, 'fine-tune', km_data, model_creator, hparams, scope=scope)
+      train_forward_sess.run(dkm_forward_model.model.global_step.initializer)
+      
+      for step in range(data_sequences.shape[0] / hparams.batch_size * 3): 
+        if step % (data_sequences.shape[0] / hparams.batch_size) == 0: 
+          train_forward_sess.run(dkm_forward_model.model.iterator.initializer)        
+        loss, up, lr = train_forward_sess.run(
+          [dkm_forward_model.model.train_loss,
+           dkm_forward_model.model.update, 
+           dkm_forward_model.model.learning_rate])        
+        global_step = step + epoch * (data_sequences.shape[0] / hparams.batch_size * 3) 
+        if step % 100 == 0: 
+          print(' running fine-tune optimizer loss: ' + str(loss) +' -step: ' + str(step) + ', ' + ' -lr: '+ str(lr)) 
+    print('------------ finished epoch: ' + str(epoch) + '-------------------------')
+    dkm_forward_model.model.saver.save( 
+      train_forward_sess, 
+      os.path.join(hparams.out_dir, "deepkmeans.ckpt" + ".epoch_" + str(epoch) + ".step_" + str(step)), 
+      global_step=global_step) 
     
     """
     data_sequences, data_seq_lens, result_outputs, result_state, ft_loss, ft_update = train_forward_sess.run( 

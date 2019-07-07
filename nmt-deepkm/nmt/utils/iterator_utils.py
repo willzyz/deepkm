@@ -272,11 +272,16 @@ def get_dkm_batch_iterator(
   
   if not output_buffer_size:
     output_buffer_size = dataset_size * 1000 
-  
+      
   eos_id = tf.cast(vocab_table.lookup(tf.constant(eos)), tf.int32)
   
   train_dataset = train_dataset.shard(num_shards, shard_index)
-    
+  
+  reshuffle_each_iteration = True
+  
+  train_dataset = train_dataset.shuffle(
+    output_buffer_size, None, reshuffle_each_iteration)
+  
   ## split the strings (according to space) into words 
   train_dataset = train_dataset.map(
       lambda src: (
@@ -337,14 +342,23 @@ def get_dkm_batch_iterator(
     initializer=batched_iter.initializer,
       source=src_ids,
       source_sequence_length=src_seq_len)
-  
+
 def get_dkm_finetune_iterator(ft_dataset, hparams): 
-      
-  batched_ft_dataset = ft_dataset.batch(hparams.batch_size) 
+  
+  output_buffer_size = hparams.batch_size * 1000
+  reshuffle_each_iteration = True
+  
+  ft_dataset = ft_dataset.shuffle(
+    output_buffer_size, None, reshuffle_each_iteration)
+  
+  ft_dataset = ft_dataset.prefetch(output_buffer_size)
+  
+  batched_ft_dataset = ft_dataset.batch(hparams.batch_size, drop_remainder=True)
+    
   batched_iter = batched_ft_dataset.make_initializable_iterator() 
-    
+  
   (src_ids, src_seq_len, c_label) = (batched_iter.get_next()) 
-    
+  
   return KMFineTuneInput( 
     initializer=batched_iter.initializer, 
     source=src_ids, 

@@ -107,8 +107,8 @@ class BaseModel(object):
       self._set_train_or_infer_km(hparams)
     
     # Saver
-    #self.saver = tf.train.Saver(
-    #    tf.global_variables(), max_to_keep=hparams.num_keep_ckpts)
+    self.saver = tf.train.Saver(
+      tf.global_variables(), max_to_keep=hparams.num_keep_ckpts)
   
   def _set_params_initializer(self,
                               hparams,
@@ -197,6 +197,7 @@ class BaseModel(object):
       self.infer_logits, _, self.final_context_state, self.sample_id = res
       self.sample_words = reverse_target_vocab_table.lookup(
           tf.to_int64(self.sample_id))
+    
     """
     if self.mode != tf.contrib.learn.ModeKeys.INFER:
       ## Count the number of predicted words for compute ppl.
@@ -403,6 +404,9 @@ class BaseModel(object):
     return sess.run(output_tuple)
   
   def select_final_sequence_output(self, encoder_outputs, data_seq_lens, hparams): 
+    ## note the variable num_samples -> keep things simple, 
+    ## always input dataset with size multiples of batch_size 
+    
     num_samples = hparams.batch_size 
     index_0 = tf.reshape(data_seq_lens, [1, num_samples, 1])
     index_0 = tf.add(index_0, -1) 
