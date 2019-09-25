@@ -2,6 +2,17 @@
 
 Repository for code in deep dynamic routing with unsupervised learning. 
 
+## [sept 22, 2019]: 
+decision to implement and clean codes on a small scale, arrive at very concrete small scale results: 
+- small model with dynamic routing using k-means on larger data set work better: model capacity exansion or solving bias problem 
+- small dataset, with larger unlabeled dataset, solving the variance problem 
+- future extensions 
+
+todo: 
+- run cifar on tensorflow 
+- implement deepkmeans 
+- replicate deepcluster 
+
 ## [Dependencies]:
 
 Python 2.7 

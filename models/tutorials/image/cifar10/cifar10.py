@@ -46,7 +46,7 @@ FLAGS = tf.app.flags.FLAGS
 # Basic model parameters.
 tf.app.flags.DEFINE_integer('batch_size', 128,
                             """Number of images to process in a batch.""")
-tf.app.flags.DEFINE_boolean('use_fp16', True,
+tf.app.flags.DEFINE_boolean('use_fp16', False,
                             """Train the model using fp16.""")
 
 # Global constants describing the CIFAR-10 data set.
@@ -143,7 +143,6 @@ def distorted_inputs():
     labels = tf.cast(labels, tf.float16)
   return images, labels
 
-
 def inputs(eval_data):
   """Construct input for CIFAR evaluation using the Reader ops.
   Args:
@@ -154,6 +153,21 @@ def inputs(eval_data):
     labels: Labels. 1D tensor of [batch_size] size.
   """
   images, labels = cifar10_input.inputs(eval_data=eval_data, batch_size=FLAGS.batch_size)
+  if FLAGS.use_fp16:
+    images = tf.cast(images, tf.float16)
+    labels = tf.cast(labels, tf.float16)
+  return images, labels
+
+def alltraininputs():
+  """Construct input for CIFAR evaluation using the Reader ops.
+  Args:
+    eval_data: bool, indicating if one should use the train or eval data set.
+
+  Returns:
+    images: Images. 4D tensor of [batch_size, IMAGE_SIZE, IMAGE_SIZE, 3] size.
+    labels: Labels. 1D tensor of [batch_size] size.
+  """
+  images, labels = cifar10_input.inputs(eval_data=False, batch_size=50000)
   if FLAGS.use_fp16:
     images = tf.cast(images, tf.float16)
     labels = tf.cast(labels, tf.float16)
@@ -175,7 +189,7 @@ def inference(images):
   # by replacing all instances of tf.get_variable() with tf.Variable().
   #
   # conv1
-  with tf.variable_scope('conv1') as scope:
+  with tf.variable_scope('conv1', reuse=tf.AUTO_REUSE) as scope:
     kernel = _variable_with_weight_decay('weights',
                                          shape=[5, 5, 3, 32],
                                          stddev=5e-2,
@@ -194,7 +208,7 @@ def inference(images):
                     name='norm1')
   
   # conv2
-  with tf.variable_scope('conv2') as scope:
+  with tf.variable_scope('conv2', reuse=tf.AUTO_REUSE) as scope:
     kernel = _variable_with_weight_decay('weights',
                                          shape=[5, 5, 32, 16],
                                          stddev=5e-2,
@@ -212,18 +226,18 @@ def inference(images):
   pool2 = tf.nn.max_pool(conv2, ksize=[1, 3, 3, 1],
                          strides=[1, 2, 2, 1], padding='SAME', name='pool2')
   
-  """
   # local3
-  with tf.variable_scope('local3') as scope:
+  with tf.variable_scope('local3', reuse=tf.AUTO_REUSE) as scope:
     # Move everything into depth so we can perform a single matrix multiply.
     reshape = tf.keras.layers.Flatten()(pool2)
     dim = reshape.get_shape()[1].value
-    weights = _variable_with_weight_decay('weights', shape=[dim, 384],
+    weights = _variable_with_weight_decay('weights', shape=[dim, 128],
                                           stddev=0.04, wd=0.004)
-    biases = _variable_on_cpu('biases', [384], tf.constant_initializer(0.1))
+    biases = _variable_on_cpu('biases', [128], tf.constant_initializer(0.1))
     local3 = tf.nn.relu(tf.matmul(reshape, weights) + biases, name=scope.name)
     _activation_summary(local3)
 
+  """
   # local4
   with tf.variable_scope('local4') as scope:
     weights = _variable_with_weight_decay('weights', shape=[384, 192],
@@ -238,18 +252,18 @@ def inference(images):
   # tf.nn.sparse_softmax_cross_entropy_with_logits accepts the unscaled logits 
   # and performs the softmax internally for efficiency.
   
-  with tf.variable_scope('softmax_linear') as scope: 
-    reshape = tf.keras.layers.Flatten()(pool2) 
-    dim = reshape.get_shape()[1].value 
-    weights = _variable_with_weight_decay('weights', [dim, NUM_CLASSES],
+  num_centroids = 300 
+  with tf.variable_scope('softmax_linear', reuse=tf.AUTO_REUSE) as scope: 
+    #reshape = tf.keras.layers.Flatten()(pool2) 
+    #dim = reshape.get_shape()[1].value 
+    weights = _variable_with_weight_decay('weights', [128, num_centroids],
                                           stddev=1.0/dim, wd=None)
-    biases = _variable_on_cpu('biases', [NUM_CLASSES],
+    biases = _variable_on_cpu('biases', [num_centroids],
                               tf.constant_initializer(0.0))
-    softmax_linear = tf.add(tf.matmul(reshape, weights), biases, name=scope.name)
+    softmax_linear = tf.add(tf.matmul(local3, weights), biases, name=scope.name)
     _activation_summary(softmax_linear)
 
-  return softmax_linear
-
+  return softmax_linear, local3 
 
 def loss(logits, labels):
   """Add L2Loss to all the trainable variables.
@@ -334,7 +348,7 @@ def train(total_loss, global_step):
   with tf.control_dependencies([loss_averages_op]):
     opt = tf.train.GradientDescentOptimizer(lr)
     grads = opt.compute_gradients(total_loss)
-
+  
   # Apply gradients.
   apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
 

@@ -610,10 +610,10 @@ def train_deepkmeans(hparams, scope=None, target_session=""):
         print('--- DKM optimize global fine-tune step: ' + str(global_steps) + ' ---') 
     
     dkm_model.save_model_ckpt()
-
+  
   return global_steps  
   """
-  
+
 def train(hparams, scope=None, target_session=""):
   """Train a translation model."""
   log_device_placement = hparams.log_device_placement

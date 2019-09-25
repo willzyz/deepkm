@@ -32,6 +32,11 @@ NUM_CLASSES = 10
 NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 50000
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 10000
 
+def _get_minibatch(batch_size, images, labels, distords=False):
+  images, labels = iterator.get_next()
+  #images, labels = images_labels['input'], images_labels['target']
+  tf.summary.image('images', images)
+  return images, labels
 
 def _get_images_labels(batch_size, split, distords=False):
   """Returns Dataset for given split."""
@@ -47,7 +52,6 @@ def _get_images_labels(batch_size, split, distords=False):
   images, labels = images_labels['input'], images_labels['target']
   tf.summary.image('images', images)
   return images, labels
-
 
 class DataPreprocessor(object):
   """Applies transformations to dataset record."""
