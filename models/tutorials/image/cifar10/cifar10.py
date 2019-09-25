@@ -67,7 +67,6 @@ INITIAL_LEARNING_RATE = 0.1       # Initial learning rate.
 # names of the summaries when visualizing a model.
 TOWER_NAME = 'tower'
 
-
 def _activation_summary(x):
   """Helper to create summaries for activations.
 
@@ -182,13 +181,15 @@ def inference(images):
 
   Returns:
     Logits.
-  """
+  """ 
+  
   # We instantiate all variables using tf.get_variable() instead of
   # tf.Variable() in order to share variables across multiple GPU training runs.
   # If we only ran this model on a single GPU, we could simplify this function
   # by replacing all instances of tf.get_variable() with tf.Variable().
-  #
+  # 
   # conv1
+  
   with tf.variable_scope('conv1', reuse=tf.AUTO_REUSE) as scope:
     kernel = _variable_with_weight_decay('weights',
                                          shape=[5, 5, 3, 32],
@@ -199,7 +200,12 @@ def inference(images):
     pre_activation = tf.nn.bias_add(conv, biases)
     conv1 = tf.nn.relu(pre_activation, name=scope.name)
     _activation_summary(conv1)
-
+    
+    #import sys; sys.path.insert(1, './conviz/') 
+    #weights = kernel
+    #name = 'conv1' 
+    #conviz.plot_conv_weights(weights, name, channels_all=True)
+    
   # pool1
   pool1 = tf.nn.max_pool(conv1, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1],
                          padding='SAME', name='pool1')

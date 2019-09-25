@@ -174,6 +174,15 @@ def train_deepkmeans():
     _, local3_acts = cifar10.inference(images) 
     sess.run(tf.global_variables_initializer())
     saver = tf.train.Saver()
+    saver.restore(sess, "./modelsave/deepkmeans.ckpt.epoch_68.step_1561.global_step_107777")
+
+    var = [v for v in tf.trainable_variables() if v.name == "conv1/weights:0"]
+    kernel = sess.run(var) 
+    import sys; sys.path.insert(1, './conviz/') ; import conviz
+    weights = kernel[0]
+    name = 'conv1' 
+    conviz.plot_conv_weights(weights, name, channels_all=True)
+    
   
   global_step = 0
   for epoch in range(200):  
